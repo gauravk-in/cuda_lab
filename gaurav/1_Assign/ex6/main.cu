@@ -33,8 +33,27 @@ using namespace std;
 
 #define USING_GPU
 
+template<typename T>
+__device__ T gpu_min(T a, T b)
+{
+    if (a < b)
+        return a;
+    else
+        return b;
+}
+
+template<typename T>
+__device__ T gpu_max(T a, T b)
+{
+    if (a < b)
+        return b;
+    else
+        return a;
+}
+
+
 // Image Gradient 
-__device__ void convolveImage(float* imgIn, float* kernel, float* imgOut, int rad, int w, size_t h, size_t nc) 
+__device__ void convolveImage(float* imgIn, float* kernel, float* imgOut, int rad, int w, int h, int nc) 
 {
     int ix = threadIdx.x + blockDim.x * blockIdx.x;
     int iy = threadIdx.y + blockDim.y * blockIdx.y;
@@ -42,24 +61,27 @@ __device__ void convolveImage(float* imgIn, float* kernel, float* imgOut, int ra
 
     int idx = ix + (iy * w) + (iz * w * h);  
  
-    if (idx < count)
+    if (ix < w && iy < h && iz < nc)
     { 
         imgOut[idx] = 0;
+	float value = 0;
         for(int j = -rad; j < rad; j++)
         {
+	    int iny = gpu_max(0, gpu_min(iy+j, h-1));
 	    for(int i = -rad; i < rad; i++)
             {
-	        size_t inIdx = idx + i + (w * j);
-	        if ((ix + i + (w * j)) > 0 && (ix + i + (w * j)) < n_pixels)
-		    imgOut[idx] += imgIn[inIdx] * kernel[i+rad + ((j+rad) * rad)];
+		int inx = gpu_max(0, gpu_min(ix+i, w-1));
+	        int inIdx = inx + iny * w + iz * w * h; 
+		value += imgIn[inIdx] * kernel[i+rad + ((j+rad) * rad)];
 	    }
 	}
+	imgOut[idx] = value;
     }
 }
 
-__global__ void callKernel(float* imgIn, float* kernel, float* imgOut, int rad, int w, size_t n_pixels, size_t count)
+__global__ void callKernel(float* imgIn, float* kernel, float* imgOut, int rad, int w, int h, int nc)
 {
-    convolveImage(imgIn, kernel, imgOut, rad, w, n_pixels, count);    
+    convolveImage(imgIn, kernel, imgOut, rad, w, h, nc);    
 }
 
 int main(int argc, char **argv)
@@ -250,8 +272,8 @@ int main(int argc, char **argv)
 	size_t count = w * h * nc;        
 
         // Thread Dimensions
-        dim3 block = dim3(128, nc, 1);
-        dim3 grid = dim3((n_pixels + block.x - 1) / block.x, 1, 1);
+        dim3 block = dim3(16, 4, nc);
+        dim3 grid = dim3((w + block.x - 1) / block.x, (h + block.y - 1) / block.y, 1);
 
         // Allocating memory on the device
         float *d_imgIn = NULL;
@@ -266,7 +288,7 @@ int main(int argc, char **argv)
         cudaMemcpy(d_kernel, kernel, 2 * rad * 2 * rad * sizeof(float), cudaMemcpyHostToDevice);
 
         // Calling Kernel
-        callKernel <<< grid, block >>> (d_imgIn, d_kernel, d_imgOut, rad, w, n_pixels, count);        
+        callKernel <<< grid, block >>> (d_imgIn, d_kernel, d_imgOut, rad, w, h, nc);        
         
         // Copying result back
         cudaMemcpy(imgOut, d_imgOut, count * sizeof(float), cudaMemcpyDeviceToHost);
