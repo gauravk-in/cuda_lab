@@ -122,7 +122,7 @@ int main(int argc, char **argv)
     getParam("gray", gray, argc, argv);
     cout << "gray: " << gray << endl;
 
-    float sigma = 0.5;
+    float sigma = 2.0;
     getParam("sigma", sigma, argc, argv);
     cout << "sigma = " << sigma << endl;
 
