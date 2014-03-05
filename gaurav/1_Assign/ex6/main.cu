@@ -29,9 +29,9 @@
 using namespace std;
 
 // uncomment to use the camera
-//#define CAMERA
+#define CAMERA
 
-//#define USING_GPU
+#define USING_GPU
 
 template<typename T>
 __device__ T gpu_min(T a, T b)
@@ -190,7 +190,51 @@ int main(int argc, char **argv)
     // allocate raw output array (the computation result will be stored in this array, then later converted to mOut for displaying)
     float *imgOut = new float[(size_t)w*h*mOut.channels()];
 
+    int rad = ceil(3 * sigma); // kernel radius
+    int kw = 2 * rad; // kernel width
+    float c = 1. / (2. * 3.142857 * sigma * sigma); // constant
 
+    float *kernel =  new float[(size_t) (kw * kw)]; // kernel
+    float *kernelOut = new float[(size_t) (kw * kw)]; // kernel to be displayed
+
+    // Computation of Kernel
+    float a;
+    float b;
+    for (int iy = 0; iy < kw; iy++)
+    {
+        a = iy - rad;
+        for (int ix = 0; ix < kw; ix++)
+        {
+            b = ix - rad;
+            kernel[ix + (iy * kw)] = c * exp(-(a*a + b*b) / (2 * sigma*sigma));
+        }
+    }
+
+    // Normalization of Kernel
+    float sum = 0.;
+    float kmax = 0.;
+    for (int iy = 0; iy < kw; iy++)
+    {
+        for (int ix = 0; ix < kw; ix++)
+        {
+            kmax = max(kmax, kernel[ix + (iy * kw)]);
+            sum += kernel[ix + (iy * kw)];
+        }
+    }
+
+    for (int iy = 0; iy < kw; iy++)
+    {
+        for (int ix = 0; ix < kw; ix++)
+        {
+            kernelOut[ix + (iy * kw)] = kernel[ix + (iy * kw)] / kmax;
+            kernel[ix + (iy * kw)] = kernel[ix + (iy * kw)] / sum;
+        }
+    }
+
+    // Display Kernel
+    cv::Mat cvKernelOut(2*rad, 2*rad, CV_32F);
+    convert_layered_to_mat(cvKernelOut, kernelOut);
+    showImage("Kernel", cvKernelOut, 100, 10);
 
 
     // For camera mode: Make a loop to read in camera frames
@@ -213,52 +257,6 @@ int main(int argc, char **argv)
     // But for CUDA it's better to work with layered images: rrr... ggg... bbb...
     // So we will convert as necessary, using interleaved "cv::Mat" for loading/saving/displaying, and layered "float*" for CUDA computations
     convert_mat_to_layered (imgIn, mIn);
-
-    int rad = ceil(3 * sigma); // kernel radius
-    int kw = 2 * rad; // kernel width
-    float c = 1. / (2. * 3.142857 * sigma * sigma); // constant
-
-    float *kernel =  new float[(size_t) (kw * kw)]; // kernel
-    float *kernelOut = new float[(size_t) (kw * kw)]; // kernel to be displayed
-
-    // Computation of Kernel
-    float a;
-    float b;
-    for (int iy = 0; iy < kw; iy++)
-    {
-	a = iy - rad;
-	for (int ix = 0; ix < kw; ix++)
-	{
-	    b = ix - rad;
-	    kernel[ix + (iy * kw)] = c * exp(-(a*a + b*b) / (2 * sigma*sigma));
-	}
-    }	
-
-    // Normalization of Kernel
-    float sum = 0.;
-    float kmax = 0.;
-    for (int iy = 0; iy < kw; iy++)
-    {
-        for (int ix = 0; ix < kw; ix++)
-	{
-	    kmax = max(kmax, kernel[ix + (iy * kw)]); 
-	    sum += kernel[ix + (iy * kw)];	    
-	}
-    }
-
-    for (int iy = 0; iy < kw; iy++)
-    {   
-	for (int ix = 0; ix < kw; ix++)
-	{
-	    kernelOut[ix + (iy * kw)] = kernel[ix + (iy * kw)] / kmax;
-	    kernel[ix + (iy * kw)] = kernel[ix + (iy * kw)] / sum;
-	}
-    }
-
-    // Display Kernel
-    cv::Mat cvKernelOut(2*rad, 2*rad, CV_32F);
-    convert_layered_to_mat(cvKernelOut, kernelOut);
-    showImage("Kernel", cvKernelOut, 100, 10);
 
     Timer timer;
     float t;
@@ -320,7 +318,7 @@ int main(int argc, char **argv)
 	{
 	    for(int iy = 0; iy < h; iy++)
 	    {
-		for(int iz = 0; iz < h; iz++)
+		for(int iz = 0; iz < nc; iz++)
 	    	{
 		    int idx = ix + (iy * w) + (iz * w * h);
 	            imgOut[idx] = 0;                                                    // initialize
@@ -377,6 +375,7 @@ int main(int argc, char **argv)
     delete[] imgIn;
     delete[] imgOut;
     delete[] kernel;
+    delete[] kernelOut;
 
     // close all opencv windows
     cvDestroyAllWindows();
