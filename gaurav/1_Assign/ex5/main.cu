@@ -37,15 +37,16 @@ __device__ void gradImage(float* imgIn, float* forwardDiffX, float* forwardDiffY
 {
     int ix = threadIdx.x + blockDim.x * blockIdx.x;
     int iy = threadIdx.y + blockDim.y * blockIdx.y;
-    
-    imgOut[ix + (iy * w)] = 0;
+
+    float value = 0.; 
     for(int i = 0; i < nc; i++)
     {
-        forwardDiffX[ix + (iy * w) + (i * w * h)] = (ix < (w-2)) ? (imgIn[ix + (iy * w) + (i * w * h) + 1] - imgIn[ix + (iy * w) + (i * w * h)]) : 0;
-        forwardDiffY[ix + (iy * w) + (i * w * h)] = (iy < (h-2)) ? (imgIn[ix + ((iy + 1) * w) + (i * w * h)] - imgIn[ix + (iy * w) + (i * w * h)]) : 0;
-        imgOut[ix + (iy * w)] += pow(forwardDiffX[ix + (iy * w) + (i * w * h)] , 2) +  pow(forwardDiffY[ix + (iy * w) + (i * w * h)] , 2);
+	int idx = ix + iy*w + i*w*h;
+        forwardDiffX[idx] = (ix < (w-2)) ? (imgIn[idx + 1] - imgIn[idx]) : 0;
+        forwardDiffY[idx] = (iy < (h-2)) ? (imgIn[idx + w] - imgIn[idx]) : 0;
+        value += pow(forwardDiffX[idx] , 2) +  pow(forwardDiffY[idx] , 2);
     }
-    imgOut[ix + (iy * w)] = sqrt(imgOut[ix + (iy * w)]);
+    imgOut[ix + (iy * w)] = sqrt(value);
 }
 
 __global__ void callKernel(float* imgIn, float* forwardDiffX, float* forwardDiffY, float* imgOut, int w, int h, int nc)
