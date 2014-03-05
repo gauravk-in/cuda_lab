@@ -18,8 +18,9 @@
 // ###
 // ### TODO: For every student of your group, please provide here:
 // ###
-// ### Gaurav Kukreja, gaurav.kukreja@tum.de, p058 
-// ###
+// ### Gaurav Kukreja, gaurav.kukreja@tum.de, p058
+// ### Miklos Homolya, miklos.homolya@tum.de, p056 
+// ### Ravikishore Kommajosyula, r.kommajosyula, p057
 // ###
 
 
