@@ -18,8 +18,9 @@
 // ###
 // ### TODO: For every student of your group, please provide here:
 // ###
-// ### name, email, login username (for example p123)
-// ###
+// ### Gaurav Kukreja, gaurav.kukreja@tum.de, p058
+// ### Miklos Homolya, miklos.homolya@tum.de, p056 
+// ### Ravikishore Kommajosyula, r.kommajosyula, p057
 // ###
 
 
@@ -29,6 +30,7 @@
 using namespace std;
 
 #define MAX_KERNEL_WIDTH 20
+
 __constant__ float constKernel[MAX_KERNEL_WIDTH * MAX_KERNEL_WIDTH];
 
 // uncomment to use the camera
@@ -165,12 +167,6 @@ int main(int argc, char **argv)
     int r = ceil(3 * sigma);
     int ksize = 2*r + 1;
 
-    if(ksize > MAX_KERNEL_WIDTH)
-    {
-        cout << "Kernel width more than Max Kernel width viz. 20" << endl;
-        return -1;
-    }
-
     float *kern = new float[ksize * ksize];
     for (int i = 0; i < 2*r+1; i++) {
         double a = i - r;
@@ -243,7 +239,8 @@ int main(int argc, char **argv)
 
 
     Timer timer; timer.start();
-#define CPU
+    for (int measurement = 0; measurement < repeats; measurement++) {
+//#define CPU
 #ifdef CPU
     for (int c = 0; c < nc; c++) {
         for (int y = 0; y < h; y++) {
@@ -261,13 +258,13 @@ int main(int argc, char **argv)
         }
     }
 #else
-    float *d_in, *d_out, *d_kern;
+    float *d_in, *d_out;
     size_t nbytes = (size_t)w*h*nc*sizeof(float);
     cudaMalloc(&d_in, nbytes);
     cudaMalloc(&d_out, nbytes);
-    //cudaMalloc(&d_kern, (size_t)ksize*ksize*sizeof(float));
+//    cudaMalloc(&d_kern, (size_t)ksize*ksize*sizeof(float));
     cudaMemcpy(d_in, imgIn, nbytes, cudaMemcpyHostToDevice);
-    // cudaMemcpy(d_kern, kern, (size_t)ksize*ksize*sizeof(float), cudaMemcpyHostToDevice);
+//    cudaMemcpy(d_kern, kern, (size_t)ksize*ksize*sizeof(float), cudaMemcpyHostToDevice);
     cudaMemcpyToSymbol(constKernel, kern, (size_t)ksize*ksize*sizeof(float));
     dim3 block(16, 8, 3);
     dim3 grid = make_grid(dim3(w, h, nc), block);
@@ -275,10 +272,16 @@ int main(int argc, char **argv)
     cudaMemcpy(imgOut, d_out, nbytes, cudaMemcpyDeviceToHost);
     cudaFree(d_in);
     cudaFree(d_out);
-    // cudaFree(d_kern);
+//    cudaFree(d_kern);
 #endif
+    }
     timer.end();  float t = timer.get();  // elapsed time in seconds
-    cout << "time: " << t*1000 << " ms" << endl;
+    cout << "time: " << (t / repeats)*1000 << " ms" << endl;
+
+
+
+
+
 
     // show input image
     showImage("Input", mIn, 100, 100);  // show at position (x_from_left=100,y_from_above=100)

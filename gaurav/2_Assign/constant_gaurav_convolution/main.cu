@@ -65,6 +65,7 @@ __device__ void convolveImage(float* imgIn, float* imgOut, int rad, int w, int h
 
     // Index of the output image, this kernel works on
     int idx = ix + (iy * w) + (iz * w * h);  
+    int kw = 2 * rad + 1;
  
     // check limits
     if (idx < w * h * nc)
@@ -78,7 +79,7 @@ __device__ void convolveImage(float* imgIn, float* imgOut, int rad, int w, int h
             {
                 int inx = gpu_max(0, gpu_min(ix+i, w-1));
                 int inIdx = inx + (iny * w) + (iz * w * h);		    // Index of Input Image to be multiplied by corresponding element in kernel
-                value += imgIn[inIdx] * constKernel[i+rad + ((j+rad) * (2 * rad + 1))];
+                value += imgIn[inIdx] * constKernel[i+rad + ((j+rad) * (kw))];
             }
         }
         imgOut[idx] = value;
