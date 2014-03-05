@@ -234,7 +234,8 @@ int main(int argc, char **argv)
 
 
     Timer timer; timer.start();
-#define CPU
+    for (int measurement = 0; measurement < repeats; measurement++) {
+//#define CPU
 #ifdef CPU
     for (int c = 0; c < nc; c++) {
         for (int y = 0; y < h; y++) {
@@ -255,29 +256,21 @@ int main(int argc, char **argv)
     float *d_in, *d_out, *d_kern;
     size_t nbytes = (size_t)w*h*nc*sizeof(float);
     cudaMalloc(&d_in, nbytes);
-    CUDA_CHECK;
     cudaMalloc(&d_out, nbytes);
-    CUDA_CHECK;
     cudaMalloc(&d_kern, (size_t)ksize*ksize*sizeof(float));
-    CUDA_CHECK;
     cudaMemcpy(d_in, imgIn, nbytes, cudaMemcpyHostToDevice);
     cudaMemcpy(d_kern, kern, (size_t)ksize*ksize*sizeof(float), cudaMemcpyHostToDevice);
-    CUDA_CHECK;
     dim3 block(16, 8, 3);
     dim3 grid = make_grid(dim3(w, h, nc), block);
     convolution<<<grid, block>>>(d_in, d_out, d_kern, w, h, nc, r);
-    CUDA_CHECK;
     cudaMemcpy(imgOut, d_out, nbytes, cudaMemcpyDeviceToHost);
-    CUDA_CHECK;
     cudaFree(d_in);
-    CUDA_CHECK;
     cudaFree(d_out);
-    CUDA_CHECK;
     cudaFree(d_kern);
-    CUDA_CHECK;
 #endif
+    }
     timer.end();  float t = timer.get();  // elapsed time in seconds
-    cout << "time: " << t*1000 << " ms" << endl;
+    cout << "time: " << (t / repeats)*1000 << " ms" << endl;
 
 
 
