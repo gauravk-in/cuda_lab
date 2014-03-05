@@ -18,7 +18,7 @@
 // ###
 // ### TODO: For every student of your group, please provide here:
 // ###
-// ### name, email, login username (for example p123)
+// ### Gaurav Kukreja, gaurav.kukreja@tum.de, p058 
 // ###
 // ###
 
@@ -31,7 +31,7 @@ using namespace std;
 // uncomment to use the camera
 //#define CAMERA
 
-#define USING_GPU
+//#define USING_GPU
 
 template<typename T>
 __device__ T gpu_min(T a, T b)
@@ -59,19 +59,21 @@ __device__ void convolveImage(float* imgIn, float* kernel, float* imgOut, int ra
     int iy = threadIdx.y + blockDim.y * blockIdx.y;
     int iz = threadIdx.z + blockDim.z * blockIdx.z;
 
+    // Index of the output image, this kernel works on
     int idx = ix + (iy * w) + (iz * w * h);  
  
-    if (ix < w && iy < h && iz < nc)
+    // check limits
+    if (idx < w * h * nc)
     { 
-        imgOut[idx] = 0;
+        imgOut[idx] = 0;						    // initialize
 	float value = 0;
-        for(int j = -rad; j < rad; j++)
-        {
-	    int iny = gpu_max(0, gpu_min(iy+j, h-1));
-	    for(int i = -rad; i < rad; i++)
+        for(int j = -rad; j < rad; j++)					    // for each row in kernel
+        {   
+	    int iny = gpu_max(0, gpu_min(iy+j, h-1));			    
+	    for(int i = -rad; i < rad; i++)				    // for each element in the kernel row
             {
 		int inx = gpu_max(0, gpu_min(ix+i, w-1));
-	        int inIdx = inx + iny * w + iz * w * h; 
+	        int inIdx = inx + (iny * w) + (iz * w * h);		    // Index of Input Image to be multiplied by corresponding element in kernel
 		value += imgIn[inIdx] * kernel[i+rad + ((j+rad) * rad)];
 	    }
 	}
@@ -86,11 +88,12 @@ __global__ void callKernel(float* imgIn, float* kernel, float* imgOut, int rad, 
 
 int main(int argc, char **argv)
 {
+#ifdef USING_GPU
     // Before the GPU can process your kernels, a so called "CUDA context" must be initialized
     // This happens on the very first call to a CUDA function, and takes some time (around half a second)
     // We will do it right here, so that the run time measurements are accurate
     cudaDeviceSynchronize();  CUDA_CHECK;
-
+#endif // USING_GPU
 
 
 
@@ -211,46 +214,48 @@ int main(int argc, char **argv)
     // So we will convert as necessary, using interleaved "cv::Mat" for loading/saving/displaying, and layered "float*" for CUDA computations
     convert_mat_to_layered (imgIn, mIn);
 
-    int rad = ceil(3 * sigma);
-    
-    float c = 1. / (2. * 3.142857 * sigma * sigma);
+    int rad = ceil(3 * sigma); // kernel radius
+    int kw = 2 * rad; // kernel width
+    float c = 1. / (2. * 3.142857 * sigma * sigma); // constant
 
-    float *kernel =  new float[(size_t) (2 * rad * 2 * rad)];
-    float *kernelOut = new float[(size_t) (2 * rad * 2 * rad)];
+    float *kernel =  new float[(size_t) (kw * kw)]; // kernel
+    float *kernelOut = new float[(size_t) (kw * kw)]; // kernel to be displayed
 
+    // Computation of Kernel
     float a;
     float b;
-    for (int iy = 0; iy < 2 * rad; iy++)
+    for (int iy = 0; iy < kw; iy++)
     {
 	a = iy - rad;
-	for (int ix = 0; ix < 2 * rad; ix++)
+	for (int ix = 0; ix < kw; ix++)
 	{
 	    b = ix - rad;
-	    kernel[ix + (iy * 2 * rad)] = c * exp(-(a*a + b*b) / (2 * sigma*sigma));
+	    kernel[ix + (iy * kw)] = c * exp(-(a*a + b*b) / (2 * sigma*sigma));
 	}
     }	
 
+    // Normalization of Kernel
     float sum = 0.;
     float kmax = 0.;
-    
-    for (int iy = 0; iy < 2 * rad; iy++)
+    for (int iy = 0; iy < kw; iy++)
     {
-        for (int ix = 0; ix < 2 * rad; ix++)
+        for (int ix = 0; ix < kw; ix++)
 	{
-	    kmax = max(kmax, kernel[ix + (iy * 2 * rad)]); 
-	    sum += kernel[ix + (iy * 2 * rad)];	    
+	    kmax = max(kmax, kernel[ix + (iy * kw)]); 
+	    sum += kernel[ix + (iy * kw)];	    
 	}
     }
 
-    for (int iy = 0; iy < 2 * rad; iy++)
+    for (int iy = 0; iy < kw; iy++)
     {   
-	for (int ix = 0; ix < 2 * rad; ix++)
+	for (int ix = 0; ix < kw; ix++)
 	{
-	    kernelOut[ix + (iy * 2 * rad)] = kernel[ix + (iy * 2 * rad)] / kmax;
-	    kernel[ix + (iy * 2 * rad)] = kernel[ix + (iy * 2 * rad)] / sum;
+	    kernelOut[ix + (iy * kw)] = kernel[ix + (iy * kw)] / kmax;
+	    kernel[ix + (iy * kw)] = kernel[ix + (iy * kw)] / sum;
 	}
     }
 
+    // Display Kernel
     cv::Mat cvKernelOut(2*rad, 2*rad, CV_32F);
     convert_layered_to_mat(cvKernelOut, kernelOut);
     showImage("Kernel", cvKernelOut, 100, 10);
@@ -268,7 +273,6 @@ int main(int argc, char **argv)
     // Repetitions Loop
     for(int rep = 0; rep < repeats; rep++)
     {
-        size_t n_pixels = w * h;
 	size_t count = w * h * nc;        
 
         // Thread Dimensions
@@ -281,11 +285,11 @@ int main(int argc, char **argv)
 	float *d_kernel = NULL;
         cudaMalloc(&d_imgIn, count * sizeof(float));
         cudaMalloc(&d_imgOut, count * sizeof(float));
-	cudaMalloc(&d_kernel, 2 * rad * 2 * rad * sizeof(float));
+	cudaMalloc(&d_kernel, kw * kw * sizeof(float));
         
         // Copying Input image to device, and initializing result to 0
         cudaMemcpy(d_imgIn, imgIn, count * sizeof(float), cudaMemcpyHostToDevice);
-        cudaMemcpy(d_kernel, kernel, 2 * rad * 2 * rad * sizeof(float), cudaMemcpyHostToDevice);
+        cudaMemcpy(d_kernel, kernel, kw * kw * sizeof(float), cudaMemcpyHostToDevice);
 
         // Calling Kernel
         callKernel <<< grid, block >>> (d_imgIn, d_kernel, d_imgOut, rad, w, h, nc);        
@@ -312,27 +316,29 @@ int main(int argc, char **argv)
     // Repetitions Loop
     for(int rep = 0; rep < repeats; rep++)    
     {
-        size_t n_pixels = w * h;
-	float *forwardDiffX = NULL;
-	float *forwardDiffY = NULL;
-
-	forwardDiffX = (float*) malloc(sizeof(float) * w * h * nc);
-	forwardDiffY = (float*) malloc(sizeof(float) * w * h * nc);
-
-        memset(imgOut, 0, n_pixels * sizeof(float));
-	
-	for(int ix = 0; ix < w; ix ++)
+        for(int ix = 0; ix < w; ix++)
+	{
 	    for(int iy = 0; iy < h; iy++)
 	    {
-		imgOut[ix + (iy * w)] = 0;
-	        for(int i = 0; i < nc; i++)
-	        {
-	            forwardDiffX[ix + (iy * w) + (i * w * h)] = (ix < (w-2)) ? (imgIn[ix + (iy * w) + (i * w * h) + 1] - imgIn[ix + (iy * w) + (i * w * h)]) : 0;
-	            forwardDiffY[ix + (iy * w) + (i * w * h)] = (iy < (h-2)) ? (imgIn[ix + ((iy + 1) * w) + (i * w * h)] - imgIn[ix + (iy * w) + (i * w * h)]) : 0; 
-	            imgOut[ix + (iy * w)] += pow(forwardDiffX[ix + (iy * w) + (i * w * h)] , 2) +  pow(forwardDiffY[ix + (iy * w) + (i * w * h)] , 2);
+		for(int iz = 0; iz < h; iz++)
+	    	{
+		    int idx = ix + (iy * w) + (iz * w * h);
+	            imgOut[idx] = 0;                                                    // initialize
+	            float value = 0;
+	            for(int j = -rad; j < rad; j++)                                     // for each row in kernel
+	            {
+	                int iny = max(0, min(iy+j, h-1));
+	                for(int i = -rad; i < rad; i++)                                 // for each element in the kernel row
+	                {
+	                    int inx = max(0, min(ix+i, w-1));
+	                    int inIdx = inx + (iny * w) + (iz * w * h);                 // Index of Input Image to be multiplied by corresponding element in kernel
+	                    value += imgIn[inIdx] * kernel[i+rad + ((j+rad) * rad)];
+	                }
+	            }
+	            imgOut[idx] = value;
 	        }
-	        imgOut[ix + (iy * w)] = sqrt(imgOut[ix + (iy * w)]);
 	    }
+	}
 	
     }
     
