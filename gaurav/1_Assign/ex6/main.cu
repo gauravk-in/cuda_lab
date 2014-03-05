@@ -67,14 +67,14 @@ __device__ void convolveImage(float* imgIn, float* kernel, float* imgOut, int ra
     { 
         imgOut[idx] = 0;						    // initialize
 	float value = 0;
-        for(int j = -rad; j < rad; j++)					    // for each row in kernel
+        for(int j = -rad; j <= rad; j++)					    // for each row in kernel
         {   
 	    int iny = gpu_max(0, gpu_min(iy+j, h-1));			    
-	    for(int i = -rad; i < rad; i++)				    // for each element in the kernel row
-            {
-		int inx = gpu_max(0, gpu_min(ix+i, w-1));
+	    for(int i = -rad; i <= rad; i++)				    // for each element in the kernel row
+        {
+            int inx = gpu_max(0, gpu_min(ix+i, w-1));
 	        int inIdx = inx + (iny * w) + (iz * w * h);		    // Index of Input Image to be multiplied by corresponding element in kernel
-		value += imgIn[inIdx] * kernel[i+rad + ((j+rad) * rad)];
+            value += imgIn[inIdx] * kernel[i+rad + ((j+rad) * (2 * rad + 1))];
 	    }
 	}
 	imgOut[idx] = value;
@@ -191,8 +191,10 @@ int main(int argc, char **argv)
     float *imgOut = new float[(size_t)w*h*mOut.channels()];
 
     int rad = ceil(3 * sigma); // kernel radius
-    int kw = 2 * rad; // kernel width
+    int kw = 2 * rad + 1; // kernel width
     float c = 1. / (2. * 3.142857 * sigma * sigma); // constant
+
+    cout << "c = " << c << endl;
 
     float *kernel =  new float[(size_t) (kw * kw)]; // kernel
     float *kernelOut = new float[(size_t) (kw * kw)]; // kernel to be displayed
@@ -232,9 +234,9 @@ int main(int argc, char **argv)
     }
 
     // Display Kernel
-    cv::Mat cvKernelOut(2*rad, 2*rad, CV_32F);
+    cv::Mat cvKernelOut(kw, kw, CV_32FC1);
     convert_layered_to_mat(cvKernelOut, kernelOut);
-    showImage("Kernel", cvKernelOut, 100, 10);
+    showImage("Kernel", cvKernelOut, 100, 100);
 
 
     // For camera mode: Make a loop to read in camera frames
@@ -280,10 +282,10 @@ int main(int argc, char **argv)
         // Allocating memory on the device
         float *d_imgIn = NULL;
         float *d_imgOut = NULL;
-	float *d_kernel = NULL;
+	    float *d_kernel = NULL;
         cudaMalloc(&d_imgIn, count * sizeof(float));
         cudaMalloc(&d_imgOut, count * sizeof(float));
-	cudaMalloc(&d_kernel, kw * kw * sizeof(float));
+	    cudaMalloc(&d_kernel, kw * kw * sizeof(float));
         
         // Copying Input image to device, and initializing result to 0
         cudaMemcpy(d_imgIn, imgIn, count * sizeof(float), cudaMemcpyHostToDevice);
@@ -323,10 +325,10 @@ int main(int argc, char **argv)
 		    int idx = ix + (iy * w) + (iz * w * h);
 	            imgOut[idx] = 0;                                                    // initialize
 	            float value = 0;
-	            for(int j = -rad; j < rad; j++)                                     // for each row in kernel
+	            for(int j = -rad; j <= rad; j++)                                     // for each row in kernel
 	            {
 	                int iny = max(0, min(iy+j, h-1));
-	                for(int i = -rad; i < rad; i++)                                 // for each element in the kernel row
+	                for(int i = -rad; i <= rad; i++)                                 // for each element in the kernel row
 	                {
 	                    int inx = max(0, min(ix+i, w-1));
 	                    int inIdx = inx + (iny * w) + (iz * w * h);                 // Index of Input Image to be multiplied by corresponding element in kernel
