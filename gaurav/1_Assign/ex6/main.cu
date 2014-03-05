@@ -66,18 +66,18 @@ __device__ void convolveImage(float* imgIn, float* kernel, float* imgOut, int ra
     if (idx < w * h * nc)
     { 
         imgOut[idx] = 0;						    // initialize
-	float value = 0;
+        float value = 0;
         for(int j = -rad; j <= rad; j++)					    // for each row in kernel
         {   
-	    int iny = gpu_max(0, gpu_min(iy+j, h-1));			    
-	    for(int i = -rad; i <= rad; i++)				    // for each element in the kernel row
-        {
-            int inx = gpu_max(0, gpu_min(ix+i, w-1));
-	        int inIdx = inx + (iny * w) + (iz * w * h);		    // Index of Input Image to be multiplied by corresponding element in kernel
-            value += imgIn[inIdx] * kernel[i+rad + ((j+rad) * (2 * rad + 1))];
+	        int iny = gpu_max(0, gpu_min(iy+j, h-1));			    
+	        for(int i = -rad; i <= rad; i++)				    // for each element in the kernel row
+            {
+                int inx = gpu_max(0, gpu_min(ix+i, w-1));
+	            int inIdx = inx + (iny * w) + (iz * w * h);		    // Index of Input Image to be multiplied by corresponding element in kernel
+                value += imgIn[inIdx] * kernel[i+rad + ((j+rad) * (2 * rad + 1))];
+	        }
 	    }
-	}
-	imgOut[idx] = value;
+	    imgOut[idx] = value;
     }
 }
 
