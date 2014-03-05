@@ -29,7 +29,7 @@
 using namespace std;
 
 // uncomment to use the camera
-#define CAMERA
+//#define CAMERA
 
 #define USING_GPU
 
@@ -274,7 +274,7 @@ int main(int argc, char **argv)
 	size_t count = w * h * nc;        
 
         // Thread Dimensions
-        dim3 block = dim3(16, 4, nc);
+        dim3 block = dim3(16, 8, nc);
         dim3 grid = dim3((w + block.x - 1) / block.x, (h + block.y - 1) / block.y, 1);
 
         // Allocating memory on the device
