@@ -53,39 +53,70 @@ __device__ T gpu_max(T a, T b)
 
 
 // Image Gradient 
-__device__ void convolveImage(float* imgIn, float* kernel, float* imgOut, int rad, int w, int h, int nc) 
+__global__ void convolveImage(float* imgIn, float* kernel, float* imgOut, int rad, int w, int h, int nc) 
 {
     int ix = threadIdx.x + blockDim.x * blockIdx.x;
     int iy = threadIdx.y + blockDim.y * blockIdx.y;
     int iz = threadIdx.z + blockDim.z * blockIdx.z;
 
-    // Index of the output image, this kernel works on
-    int idx = ix + (iy * w) + (iz * w * h);  
-    int kw = 2 * rad + 1;
+    // Index of the output image this kernel works on
+    int idx = ix + (iy * w) + (iz * w * h);
+    // Index of shared Input Image this kernel uses
+    int s_imgIn_w = blockDim.x + 2*rad+1;
+    int s_imgIn_h = blockDim.y + 2*rad+1;
+    int s_inIdx = (threadIdx.x+rad) + ((threadIdx.y+rad) * s_imgIn_w) + (threadIdx.z*s_imgIn_w*s_imgIn_h);
+
+    extern __shared__ float s_imgIn[];
 
     // check limits
     if (idx < w * h * nc)
     { 
-        imgOut[idx] = 0;						    // initialize
+        s_imgIn[s_inIdx] = imgIn[idx];
+
+        if(threadIdx.x == 0 && ix != 0)
+        {
+            for(int i = 0; i <= rad; i++)
+                s_imgIn[s_inIdx - i] = imgIn[idx - i];
+        }
+        if(threadIdx.x == (blockDim.x-1) && ix != w-1)
+        {
+            for(int i = 0; i <= rad; i++)
+                s_imgIn[s_inIdx + i] = imgIn[idx + i];
+        }
+        if(threadIdx.y == 0 && iy != 0)
+        {
+            for(int i = 0; i <= rad; i++)
+                s_imgIn[s_inIdx - i*s_imgIn_w] = imgIn[idx - i*w];
+        }
+        if(threadIdx.y == (blockDim.y-1) && iy != h-1)
+        {
+            for(int i = 0; i <= rad; i++)
+                s_imgIn[s_inIdx + i*s_imgIn_w] = imgIn[idx + i*w];
+        }
+
+        __syncthreads();
+
         float value = 0;
-        for(int j = -rad; j <= rad; j++)					    // for each row in kernel
-        {   
-	        int iny = gpu_max(0, gpu_min(iy+j, h-1));			    
-	        for(int i = -rad; i <= rad; i++)				    // for each element in the kernel row
+        for(int j = -rad; j <= rad; j++)					            // for each row in kernel
+        {
+            int s_iny = rad + threadIdx.y + j;
+            //int iny = gpu_max(0, gpu_min(iy+j, h-1));		    
+            for(int i = -rad; i <= rad; i++)				            // for each element in the kernel row
             {
-                int inx = gpu_max(0, gpu_min(ix+i, w-1));
-	            int inIdx = inx + (iny * w) + (iz * w * h);		    // Index of Input Image to be multiplied by corresponding element in kernel
-                value += imgIn[inIdx] * kernel[i+rad + ((j+rad) * kw)];
-	        }
-	    }
-	    imgOut[idx] = value;
+                int s_inx = rad + threadIdx.x + i;
+                //int inx = gpu_max(0, gpu_min(ix+i, w-1));
+                int s_inIdx = s_inx + (s_iny * s_imgIn_w) + (threadIdx.z*s_imgIn_w*s_imgIn_h);            // Index of Input Image to be multiplied by corresponding element in kernel
+                value += s_imgIn[s_inIdx] * kernel[i+rad + ((j+rad) * (2 * rad + 1))];
+            }
+        }
+        imgOut[idx] = value;
     }
 }
 
-__global__ void callKernel(float* imgIn, float* kernel, float* imgOut, int rad, int w, int h, int nc)
-{
-    convolveImage(imgIn, kernel, imgOut, rad, w, h, nc);    
-}
+// __global__ void callKernel(float* imgIn, float* kernel, float* imgOut, int rad, int w, int h, int nc)
+// {
+//     convolveImage(imgIn, kernel, imgOut, rad, w, h, nc);    
+// }
 
 int main(int argc, char **argv)
 {
@@ -95,8 +126,6 @@ int main(int argc, char **argv)
     // We will do it right here, so that the run time measurements are accurate
     cudaDeviceSynchronize();  CUDA_CHECK;
 #endif // USING_GPU
-
-
 
     // Reading command line parameters:
     // getParam("param", var, argc, argv) looks whether "-param xyz" is specified, and if so stores the value "xyz" in "var"
@@ -195,8 +224,6 @@ int main(int argc, char **argv)
     int kw = 2 * rad + 1; // kernel width
     float c = 1. / (2. * 3.142857 * sigma * sigma); // constant
 
-    cout << "c = " << c << endl;
-
     float *kernel =  new float[(size_t) (kw * kw)]; // kernel
     float *kernelOut = new float[(size_t) (kw * kw)]; // kernel to be displayed
 
@@ -235,9 +262,9 @@ int main(int argc, char **argv)
     }
 
     // Display Kernel
-    cv::Mat cvKernelOut(kw, kw, CV_32FC1);
+    cv::Mat cvKernelOut(kw, kw, CV_32F);
     convert_layered_to_mat(cvKernelOut, kernelOut);
-    showImage("Kernel", cvKernelOut, 100, 100);
+    showImage("Kernel", cvKernelOut, 100, 10);
 
 
     // For camera mode: Make a loop to read in camera frames
@@ -277,32 +304,35 @@ int main(int argc, char **argv)
 	size_t count = w * h * nc;        
 
         // Thread Dimensions
-        dim3 block = dim3(16, 8, nc);
+        dim3 block = dim3(16, 16, nc);
         dim3 grid = dim3((w + block.x - 1) / block.x, (h + block.y - 1) / block.y, 1);
+        size_t smBytes = (block.x + 2 * rad) * (block.y + 2 * rad) * block.z * sizeof(float);
+
+        cout << "Shared Memory = " << smBytes << endl ;
 
         // Allocating memory on the device
         float *d_imgIn = NULL;
         float *d_imgOut = NULL;
-	    float *d_kernel = NULL;
+        float *d_kernel = NULL;
         cudaMalloc(&d_imgIn, count * sizeof(float));
         cudaMalloc(&d_imgOut, count * sizeof(float));
-	    cudaMalloc(&d_kernel, kw * kw * sizeof(float));
+        cudaMalloc(&d_kernel, kw * kw * sizeof(float));
         
         // Copying Input image to device, and initializing result to 0
         cudaMemcpy(d_imgIn, imgIn, count * sizeof(float), cudaMemcpyHostToDevice);
         cudaMemcpy(d_kernel, kernel, kw * kw * sizeof(float), cudaMemcpyHostToDevice);
 
         // Calling Kernel
-        callKernel <<< grid, block >>> (d_imgIn, d_kernel, d_imgOut, rad, w, h, nc);        
+        convolveImage <<< grid, block, smBytes >>> (d_imgIn, d_kernel, d_imgOut, rad, w, h, nc);        
         
         // Copying result back
         cudaMemcpy(imgOut, d_imgOut, count * sizeof(float), cudaMemcpyDeviceToHost);
  
-	CUDA_CHECK;
+	    CUDA_CHECK;
  
         // Freeing Memory
         cudaFree(d_imgIn);
-	cudaFree(d_kernel);
+	    cudaFree(d_kernel);
         cudaFree(d_imgOut);
     }
     

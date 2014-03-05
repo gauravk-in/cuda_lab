@@ -18,23 +18,20 @@
 // ###
 // ### TODO: For every student of your group, please provide here:
 // ###
-// ### Gaurav Kukreja, gaurav.kukreja@tum.de, p058 
-// ### Ravikishore Kommajosyula, r.kommajosyula@tum.de, p059
-// ### Miklos Homolya, miklos.homolya@tum.de, p057
+// ### name, email, login username (for example p123)
+// ###
 // ###
 
 
 #include "aux.h"
 #include <iostream>
-#include <math.h>
+#include <opencv2/imgproc/imgproc.hpp>
 using namespace std;
 
 // uncomment to use the camera
-#define CAMERA
+//#define CAMERA
 
-#define USING_GPU
-
-    template<typename T>
+template<typename T>
 __device__ T gpu_min(T a, T b)
 {
     if (a < b)
@@ -43,7 +40,7 @@ __device__ T gpu_min(T a, T b)
         return b;
 }
 
-    template<typename T>
+template<typename T>
 __device__ T gpu_max(T a, T b)
 {
     if (a < b)
@@ -52,49 +49,42 @@ __device__ T gpu_max(T a, T b)
         return a;
 }
 
-
-// Image Gradient 
-__device__ void convolveImage(float* imgIn, float* kernel, float* imgOut, int rad, int w, int h, int nc) 
+__global__ void convolution(float *in, float *out, float *kern,
+                            int w, int h, int nc, int r)
 {
-    int ix = threadIdx.x + blockDim.x * blockIdx.x;
-    int iy = threadIdx.y + blockDim.y * blockIdx.y;
-    int iz = threadIdx.z + blockDim.z * blockIdx.z;
-
-    // Index of the output image, this kernel works on
-    int idx = ix + (iy * w) + (iz * w * h);  
-
-    // check limits
-    if (idx < w * h * nc)
-    { 
-        imgOut[idx] = 0;						    // initialize
+    int ksize = 2*r + 1;
+    int x = threadIdx.x + blockDim.x * blockIdx.x;
+    int y = threadIdx.y + blockDim.y * blockIdx.y;
+    int c = threadIdx.z + blockDim.z * blockIdx.z;
+    if (x < w && y < h && c < nc) {
         float value = 0;
-        for(int j = -rad; j < rad; j++)					    // for each row in kernel
-        {   
-            int iny = gpu_max(0, gpu_min(iy+j, h-1));			    
-            for(int i = -rad; i < rad; i++)				    // for each element in the kernel row
-            {
-                int inx = gpu_max(0, gpu_min(ix+i, w-1));
-                int inIdx = inx + (iny * w) + (iz * w * h);		    // Index of Input Image to be multiplied by corresponding element in kernel
-                value += imgIn[inIdx] * kernel[i+rad + ((j+rad) * rad)];
+        for (int ky = 0; ky < ksize; ky++) {
+            int cy = gpu_max(0, gpu_min(y + ky - r, h-1));
+            for (int kx = 0; kx < ksize; kx++) {
+                int cx = gpu_max(0, gpu_min(x + kx - r, w-1));
+                value += kern[kx + ksize*ky] * in[cx + w*cy + w*h*c];
             }
         }
-        imgOut[idx] = value;
+        out[x + w*y + w*h*c] = value;
     }
 }
 
-__global__ void callKernel(float* imgIn, float* kernel, float* imgOut, int rad, int w, int h, int nc)
+inline int divc(int n, int b) { return (n + b - 1) / b; }
+
+inline dim3 make_grid(dim3 whole, dim3 block)
 {
-    convolveImage(imgIn, kernel, imgOut, rad, w, h, nc);    
+    return dim3(divc(whole.x, block.x),
+                divc(whole.y, block.y),
+                divc(whole.z, block.z));
 }
 
 int main(int argc, char **argv)
 {
-#ifdef USING_GPU
     // Before the GPU can process your kernels, a so called "CUDA context" must be initialized
     // This happens on the very first call to a CUDA function, and takes some time (around half a second)
     // We will do it right here, so that the run time measurements are accurate
     cudaDeviceSynchronize();  CUDA_CHECK;
-#endif // USING_GPU
+
 
 
 
@@ -110,46 +100,45 @@ int main(int argc, char **argv)
     string image = "";
     bool ret = getParam("i", image, argc, argv);
     if (!ret) cerr << "ERROR: no image specified" << endl;
-    if (argc <= 1) { cout << "Usage: " << argv[0] << " -i <image> [-repeats <repeats>] [-gray] [-sigma <sigma>]" << endl << "\t Default Value of sigma = 0.5" << endl; return 1; }
+    if (argc <= 1) { cout << "Usage: " << argv[0] << " -i <image> [-repeats <repeats>] [-gray]" << endl; return 1; }
 #endif
-
+    
     // number of computation repetitions to get a better run time measurement
     int repeats = 1;
     getParam("repeats", repeats, argc, argv);
     cout << "repeats: " << repeats << endl;
-
+    
     // load the input image as grayscale if "-gray" is specifed
     bool gray = false;
     getParam("gray", gray, argc, argv);
     cout << "gray: " << gray << endl;
 
-    float sigma = 0.5;
-    getParam("sigma", sigma, argc, argv);
-    cout << "sigma = " << sigma << endl;
-
     // ### Define your own parameters here as needed    
+    float sigma = 2.0;
+    getParam("sigma", sigma, argc, argv);
+    cout << "sigma: " << sigma << endl;
 
     // Init camera / Load input image
 #ifdef CAMERA
 
     // Init camera
-    cv::VideoCapture camera(0);
-    if(!camera.isOpened()) { cerr << "ERROR: Could not open camera" << endl; return 1; }
+  	cv::VideoCapture camera(0);
+  	if(!camera.isOpened()) { cerr << "ERROR: Could not open camera" << endl; return 1; }
     int camW = 640;
     int camH = 480;
-    camera.set(CV_CAP_PROP_FRAME_WIDTH,camW);
-    camera.set(CV_CAP_PROP_FRAME_HEIGHT,camH);
+  	camera.set(CV_CAP_PROP_FRAME_WIDTH,camW);
+  	camera.set(CV_CAP_PROP_FRAME_HEIGHT,camH);
     // read in first frame to get the dimensions
     cv::Mat mIn;
     camera >> mIn;
-
+    
 #else
-
+    
     // Load the input image using opencv (load as grayscale if "gray==true", otherwise as is (may be color or grayscale))
     cv::Mat mIn = cv::imread(image.c_str(), (gray? CV_LOAD_IMAGE_GRAYSCALE : -1));
     // check
     if (mIn.data == NULL) { cerr << "ERROR: Could not load image " << image << endl; return 1; }
-
+    
 #endif
 
     // convert to float representation (opencv loads image values as single bytes by default)
@@ -166,18 +155,42 @@ int main(int argc, char **argv)
 
 
     // Set the output image format
-    // ###
-    // ###
-    // ### TODO: Change the output image format as needed
-    // ###
-    // ###
     cv::Mat mOut(h,w,mIn.type());  // mOut will have the same number of channels as the input image, nc layers
-    //cv::Mat mOut(h,w,CV_32FC3);    // mOut will be a color image, 3 layers
-    //cv::Mat mOut(h,w,CV_32FC1);    // mOut will be a grayscale image, 1 layer
     // ### Define your own output images here as needed
 
+    // Size of the kernel
+    int r = ceil(3 * sigma);
+    int ksize = 2*r + 1;
 
+    float *kern = new float[ksize * ksize];
+    for (int i = 0; i < 2*r+1; i++) {
+        double a = i - r;
+        for (int j = 0; j < 2*r+1; j++) {
+            double b = j - r;
+            kern[i*ksize + j] = exp(-(a*a + b*b) / (2 * sigma*sigma))
+                                / (2 * M_PI * sigma*sigma);
+        }
+    }
 
+    float kernMax = 0;
+    float kernSum = 0;
+    for (int i = 0; i < 2*r+1; i++) {
+        for (int j = 0; j < 2*r+1; j++) {
+            kernSum += kern[i*ksize + j];
+            kernMax = std::max(kernMax, kern[i*ksize + j]);
+        }
+    }
+
+    float *kernOut = new float[(2*r + 1) * (2*r + 1)];
+    for (int i = 0; i < 2*r+1; i++) {
+        for (int j = 0; j < 2*r+1; j++) {
+            kernOut[i*ksize + j] = kern[i*ksize + j] / kernMax;
+            kern[i*ksize + j] /= kernSum;
+        }
+    }
+
+    cv::Mat mKernOut(ksize, ksize, CV_32F);
+    convert_layered_to_mat(mKernOut, kernOut);
 
     // Allocate arrays
     // input/output image width: w
@@ -191,51 +204,7 @@ int main(int argc, char **argv)
     // allocate raw output array (the computation result will be stored in this array, then later converted to mOut for displaying)
     float *imgOut = new float[(size_t)w*h*mOut.channels()];
 
-    int rad = ceil(3 * sigma); // kernel radius
-    int kw = 2 * rad; // kernel width
-    float c = 1. / (2. * 3.142857 * sigma * sigma); // constant
 
-    float *kernel =  new float[(size_t) (kw * kw)]; // kernel
-    float *kernelOut = new float[(size_t) (kw * kw)]; // kernel to be displayed
-
-    // Computation of Kernel
-    float a;
-    float b;
-    for (int iy = 0; iy < kw; iy++)
-    {
-        a = iy - rad;
-        for (int ix = 0; ix < kw; ix++)
-        {
-            b = ix - rad;
-            kernel[ix + (iy * kw)] = c * exp(-(a*a + b*b) / (2 * sigma*sigma));
-        }
-    }
-
-    // Normalization of Kernel
-    float sum = 0.;
-    float kmax = 0.;
-    for (int iy = 0; iy < kw; iy++)
-    {
-        for (int ix = 0; ix < kw; ix++)
-        {
-            kmax = max(kmax, kernel[ix + (iy * kw)]);
-            sum += kernel[ix + (iy * kw)];
-        }
-    }
-
-    for (int iy = 0; iy < kw; iy++)
-    {
-        for (int ix = 0; ix < kw; ix++)
-        {
-            kernelOut[ix + (iy * kw)] = kernel[ix + (iy * kw)] / kmax;
-            kernel[ix + (iy * kw)] = kernel[ix + (iy * kw)] / sum;
-        }
-    }
-
-    // Display Kernel
-    cv::Mat cvKernelOut(2*rad, 2*rad, CV_32F);
-    convert_layered_to_mat(cvKernelOut, kernelOut);
-    showImage("Kernel", cvKernelOut, 100, 10);
 
 
     // For camera mode: Make a loop to read in camera frames
@@ -245,120 +214,90 @@ int main(int argc, char **argv)
     // returns a value <0 if no key is pressed during this time, returns immediately with a value >=0 if a key is pressed
     while (cv::waitKey(30) < 0)
     {
-        // Get camera image
-        camera >> mIn;
-        // convert to float representation (opencv loads image values as single bytes by default)
-        mIn.convertTo(mIn,CV_32F);
-        // convert range of each channel to [0,1] (opencv default is [0,255])
-        mIn /= 255.f;
+    // Get camera image
+    camera >> mIn;
+    // convert to float representation (opencv loads image values as single bytes by default)
+    mIn.convertTo(mIn,CV_32F);
+    // convert range of each channel to [0,1] (opencv default is [0,255])
+    mIn /= 255.f;
 #endif
 
-        // Init raw input image array
-        // opencv images are interleaved: rgb rgb rgb...  (actually bgr bgr bgr...)
-        // But for CUDA it's better to work with layered images: rrr... ggg... bbb...
-        // So we will convert as necessary, using interleaved "cv::Mat" for loading/saving/displaying, and layered "float*" for CUDA computations
-        convert_mat_to_layered (imgIn, mIn);
+    // Init raw input image array
+    // opencv images are interleaved: rgb rgb rgb...  (actually bgr bgr bgr...)
+    // But for CUDA it's better to work with layered images: rrr... ggg... bbb...
+    // So we will convert as necessary, using interleaved "cv::Mat" for loading/saving/displaying, and layered "float*" for CUDA computations
+    convert_mat_to_layered (imgIn, mIn);
 
-        Timer timer;
-        float t;
-        // ###
-        // ###
-        // ### TODO: Main computation
-        // ###
-        // ###
-#ifdef USING_GPU
-        timer.start();
 
-        // Repetitions Loop
-        for(int rep = 0; rep < repeats; rep++)
-        {
-            size_t count = w * h * nc;        
 
-            // Thread Dimensions
-            dim3 block = dim3(16, 4, nc);
-            dim3 grid = dim3((w + block.x - 1) / block.x, (h + block.y - 1) / block.y, 1);
 
-            // Allocating memory on the device
-            float *d_imgIn = NULL;
-            float *d_imgOut = NULL;
-            float *d_kernel = NULL;
-            cudaMalloc(&d_imgIn, count * sizeof(float));
-            cudaMalloc(&d_imgOut, count * sizeof(float));
-            cudaMalloc(&d_kernel, kw * kw * sizeof(float));
 
-            // Copying Input image to device, and initializing result to 0
-            cudaMemcpy(d_imgIn, imgIn, count * sizeof(float), cudaMemcpyHostToDevice);
-            cudaMemcpy(d_kernel, kernel, kw * kw * sizeof(float), cudaMemcpyHostToDevice);
 
-            // Calling Kernel
-            callKernel <<< grid, block >>> (d_imgIn, d_kernel, d_imgOut, rad, w, h, nc);        
-
-            // Copying result back
-            cudaMemcpy(imgOut, d_imgOut, count * sizeof(float), cudaMemcpyDeviceToHost);
-
-            CUDA_CHECK;
-
-            // Freeing Memory
-            cudaFree(d_imgIn);
-            cudaFree(d_kernel);
-            cudaFree(d_imgOut);
-        }
-
-        timer.end();
-        t = timer.get();
-
-#else // USING_GPU
-        // CPU Implementation
-
-        timer.start();
-
-        // Repetitions Loop
-        for(int rep = 0; rep < repeats; rep++)    
-        {
-            for(int ix = 0; ix < w; ix++)
-            {
-                for(int iy = 0; iy < h; iy++)
-                {
-                    for(int iz = 0; iz < nc; iz++)
-                    {
-                        int idx = ix + (iy * w) + (iz * w * h);
-                        imgOut[idx] = 0;                                                    // initialize
-                        float value = 0;
-                        for(int j = -rad; j < rad; j++)                                     // for each row in kernel
-                        {
-                            int iny = max(0, min(iy+j, h-1));
-                            for(int i = -rad; i < rad; i++)                                 // for each element in the kernel row
-                            {
-                                int inx = max(0, min(ix+i, w-1));
-                                int inIdx = inx + (iny * w) + (iz * w * h);                 // Index of Input Image to be multiplied by corresponding element in kernel
-                                value += imgIn[inIdx] * kernel[i+rad + ((j+rad) * rad)];
-                            }
-                        }
-                        imgOut[idx] = value;
+    Timer timer; timer.start();
+#define CPU
+#ifdef CPU
+    for (int c = 0; c < nc; c++) {
+        for (int y = 0; y < h; y++) {
+            for (int x = 0; x < w; x++) {
+                float value = 0;
+                for (int ky = 0; ky < ksize; ky++) {
+                    int cy = std::max(0, std::min(y + ky - r, h-1));
+                    for (int kx = 0; kx < ksize; kx++) {
+                        int cx = std::max(0, std::min(x + kx - r, w-1));
+                        value += kern[kx + ksize*ky] * imgIn[cx + w*cy + w*h*c];
                     }
                 }
+                imgOut[x + w*y + w*h*c] = value;
             }
-
         }
-
-        timer.end();  
-        t = timer.get();  // elapsed time in seconds
-
+    }
+#else
+    float *d_in, *d_out, *d_kern;
+    size_t nbytes = (size_t)w*h*nc*sizeof(float);
+    cudaMalloc(&d_in, nbytes);
+    CUDA_CHECK;
+    cudaMalloc(&d_out, nbytes);
+    CUDA_CHECK;
+    cudaMalloc(&d_kern, (size_t)ksize*ksize*sizeof(float));
+    CUDA_CHECK;
+    cudaMemcpy(d_in, imgIn, nbytes, cudaMemcpyHostToDevice);
+    cudaMemcpy(d_kern, kern, (size_t)ksize*ksize*sizeof(float), cudaMemcpyHostToDevice);
+    CUDA_CHECK;
+    dim3 block(16, 8, 3);
+    dim3 grid = make_grid(dim3(w, h, nc), block);
+    convolution<<<grid, block>>>(d_in, d_out, d_kern, w, h, nc, r);
+    CUDA_CHECK;
+    cudaMemcpy(imgOut, d_out, nbytes, cudaMemcpyDeviceToHost);
+    CUDA_CHECK;
+    cudaFree(d_in);
+    CUDA_CHECK;
+    cudaFree(d_out);
+    CUDA_CHECK;
+    cudaFree(d_kern);
+    CUDA_CHECK;
 #endif
+    timer.end();  float t = timer.get();  // elapsed time in seconds
+    cout << "time: " << t*1000 << " ms" << endl;
 
-        cout << "time: " << t*1000 << " ms" << endl;
 
-        // show input image
-        showImage("Input", mIn, 100, 100);  // show at position (x_from_left=100,y_from_above=100)
 
-        // show output image: first convert to interleaved opencv format from the layered raw array
-        convert_layered_to_mat(mOut, imgOut);
-        showImage("Output", mOut, 100+w+40, 100);
 
-        // ### Display your own output images here as needed
+
+
+    // show input image
+    showImage("Input", mIn, 100, 100);  // show at position (x_from_left=100,y_from_above=100)
+
+    // show output image: first convert to interleaved opencv format from the layered raw array
+    convert_layered_to_mat(mOut, imgOut);
+    showImage("Output", mOut, 100+w+40, 100);
+
+    // show kernel
+    showImage("Kernel", mKernOut, 100+2*(w+40), 100);
+
+    // ### Display your own output images here as needed
 
 #ifdef CAMERA
-        // end of camera loop
+    // end of camera loop
     }
 #else
     // wait for key inputs
@@ -375,8 +314,8 @@ int main(int argc, char **argv)
     // free allocated arrays
     delete[] imgIn;
     delete[] imgOut;
-    delete[] kernel;
-    delete[] kernelOut;
+    delete[] kern;
+    delete[] kernOut;
 
     // close all opencv windows
     cvDestroyAllWindows();
