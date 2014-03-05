@@ -61,11 +61,11 @@ __device__ void convolveImage(float* imgIn, float* kernel, float* imgOut, int ra
 	int iz = threadIdx.z + blockDim.z * blockIdx.z;
 
 	// Index of the output image, this kernel works on
-	int idx = ix + (iy * w) + (iz * w * h);  
+	size_t idx = ix + (iy * w) + (iz * w * h);  
 	int kw = 2 * rad + 1;
 
 	// check limits
-	if (idx < w * h * nc)
+	if (ix < w && iy < h && iz < nc)
 	{ 
 		imgOut[idx] = 0;													// initialize
 		float value = 0;
@@ -275,7 +275,7 @@ int main(int argc, char **argv)
 		// Repetitions Loop
 		for(int rep = 0; rep < repeats; rep++)
 		{
-			size_t count = w * h * nc;        
+			size_t count = (size_t)w * h * nc;        
 
 			// Thread Dimensions
 			dim3 block = dim3(16, 8, nc);
