@@ -50,7 +50,7 @@ __device__ T gpu_max(T a, T b)
         return a;
 }
 
-__device__ void calculate_laplacian(float *image, float *jacobian, int w, int h, int nc, float tau) {
+__global__ void calculate_laplacian(float *image, float *jacobian, int w, int h, int nc, float tau) {
     int x = threadIdx.x + blockDim.x * blockIdx.x;
     int y = threadIdx.y + blockDim.y * blockIdx.y;
     int c = threadIdx.z + blockDim.z * blockIdx.z;
@@ -66,7 +66,7 @@ __device__ void calculate_laplacian(float *image, float *jacobian, int w, int h,
 }
 
 
-__device__ void update_operator(float *image, float *jacobian, int w, int h, int nc, float tau) {
+__global__ void update_operator(float *image, float *jacobian, int w, int h, int nc, float tau) {
     int x = threadIdx.x + blockDim.x * blockIdx.x;
     int y = threadIdx.y + blockDim.y * blockIdx.y;
     int c = threadIdx.z + blockDim.z * blockIdx.z;
@@ -74,15 +74,6 @@ __device__ void update_operator(float *image, float *jacobian, int w, int h, int
     if (x < w && y < h && c < nc) {
         image[idx] += tau * jacobian[idx];
     }
-}
-
-__global__ void linear_diffusion(float *image, float *jacobian, int w, int h, int nc,
-		float tau, int iterations) {
-
-	for( int i = 1; i < iterations; i++ ) {
-		calculate_laplacian(image, jacobian, w, h, nc, tau);
-		update_operator(image, jacobian, w, h, nc, tau);
-	}
 }
 
 inline int divc(int n, int b) { return (n + b - 1) / b; }
@@ -224,8 +215,15 @@ int main(int argc, char **argv)
 
 		dim3 block(16, 8, 3);
 		dim3 grid = make_grid(dim3(w, h, nc), block);
-		linear_diffusion<<<grid, block>>>(d_in, d_out, w, h, nc, tau, iterations);
+
+		for(int iter = 0; iter < iterations; iter++)
+		{
+			calculate_laplacian <<<grid, block>>> (d_in, d_out, w, h, nc, tau);
+			update_operator <<<grid, block>>> (d_in, d_out, w, h, nc, tau);
+		}
+
 		cudaMemcpy(imgOut, d_in, nbytes, cudaMemcpyDeviceToHost);
+
 		cudaFree(d_in);
 		cudaFree(d_out);
     }
