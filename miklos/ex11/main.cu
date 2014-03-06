@@ -53,19 +53,20 @@ __global__ void gradient(float *image, float *vx, float *vy, int w, int h, int n
 {
     int x = threadIdx.x + blockDim.x * blockIdx.x;
     int y = threadIdx.y + blockDim.y * blockIdx.y;
-    int c = threadIdx.z + blockDim.z * blockIdx.z;
-    if (x < w && y < h && c < nc) {
-        int i = x + w*y + w*h*c;
+    if (x < w && y < h) {
+        for (int c = 0; c < nc; c++) {
+            int i = x + w*y + w*h*c;
 
-        if (x == w-1)
-            vx[i] = 0;
-        else
-            vx[i] = image[i + 1] - image[i];
+            if (x == w-1)
+                vx[i] = 0;
+            else
+                vx[i] = image[i + 1] - image[i];
 
-        if (y == h-1)
-            vy[i] = 0;
-        else
-            vy[i] = image[i + w] - image[i];
+            if (y == h-1)
+                vy[i] = 0;
+            else
+                vy[i] = image[i + w] - image[i];
+        }
     }
 }
 
@@ -98,12 +99,13 @@ __global__ void divergence(float *u1, float *u2, float *div, int w, int h, int n
 {
     int x = threadIdx.x + blockDim.x * blockIdx.x;
     int y = threadIdx.y + blockDim.y * blockIdx.y;
-    int c = threadIdx.z + blockDim.z * blockIdx.z;
-    if (x < w && y < h && c < nc) {
-        int i = x + w*y + w*h*c;
-        float dx_u1 = u1[i] - ((x > 0) ? u1[i - 1] : 0);
-        float dy_u2 = u2[i] - ((y > 0) ? u2[i - w] : 0);
-        div[i] = dx_u1 + dy_u2;
+    if (x < w && y < h) {
+        for (int c = 0; c < nc; c++) {
+            int i = x + w*y + w*h*c;
+            float dx_u1 = u1[i] - ((x > 0) ? u1[i - 1] : 0);
+            float dy_u2 = u2[i] - ((y > 0) ? u2[i - w] : 0);
+            div[i] = dx_u1 + dy_u2;
+        }
     }
 }
 
@@ -111,10 +113,11 @@ __global__ void update(float *image, float *dir, int w, int h, int nc, float tau
 {
     int x = threadIdx.x + blockDim.x * blockIdx.x;
     int y = threadIdx.y + blockDim.y * blockIdx.y;
-    int c = threadIdx.z + blockDim.z * blockIdx.z;
-    if (x < w && y < h && c < nc) {
-        int i = x + w*y + w*h*c;
-        image[i] += tau * dir[i];
+    if (x < w && y < h) {
+        for (int c = 0; c < nc; c++) {
+            int i = x + w*y + w*h*c;
+            image[i] += tau * dir[i];
+        }
     }
 }
 
@@ -256,9 +259,8 @@ int main(int argc, char **argv)
     // So we will convert as necessary, using interleaved "cv::Mat" for loading/saving/displaying, and layered "float*" for CUDA computations
     convert_mat_to_layered (imgIn, mIn);
 
-    dim3 dim(w, h, nc);
-    dim3 block2d(32, 16);
-    dim3 block3d(16, 8, 3);
+    dim3 block(32, 16);
+    dim3 grid = make_grid(dim3(w, h, 1), block);
 
     Timer timer; timer.start();
     float *d_image, *d_vx, *d_vy, *d_div;
@@ -269,10 +271,10 @@ int main(int argc, char **argv)
     cudaMemcpy(d_image, imgIn, imageBytes, cudaMemcpyHostToDevice);
 
     for (int n = 0; n < N; n++) {
-        gradient<<< make_grid(dim, block3d), block3d >>>(d_image, d_vx, d_vy, w, h, nc);
-        compute_P<<< make_grid(dim, block2d), block2d >>>(d_vx, d_vy, w, h, nc, epsilon);
-        divergence<<< make_grid(dim, block3d), block3d >>>(d_vx, d_vy, d_div, w, h, nc);
-        update<<< make_grid(dim, block3d), block3d >>>(d_image, d_div, w, h, nc, tau);
+        gradient<<< grid, block >>>(d_image, d_vx, d_vy, w, h, nc);
+        compute_P<<< grid, block >>>(d_vx, d_vy, w, h, nc, epsilon);
+        divergence<<< grid, block >>>(d_vx, d_vy, d_div, w, h, nc);
+        update<<< grid, block >>>(d_image, d_div, w, h, nc, tau);
     }
 
     cudaMemcpy(imgOut, d_image, imageBytes, cudaMemcpyDeviceToHost);
