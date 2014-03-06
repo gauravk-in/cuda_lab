@@ -49,48 +49,30 @@ __device__ __host__ T clamp(T m, T x, T M)
 }
 
 
-__global__ void gradient(float *image, float *vx, float *vy, int w, int h, int nc)
-{
-    int x = threadIdx.x + blockDim.x * blockIdx.x;
-    int y = threadIdx.y + blockDim.y * blockIdx.y;
-    if (x < w && y < h) {
-        for (int c = 0; c < nc; c++) {
-            int i = x + w*y + w*h*c;
-
-            if (x == w-1)
-                vx[i] = 0;
-            else
-                vx[i] = image[i + 1] - image[i];
-
-            if (y == h-1)
-                vy[i] = 0;
-            else
-                vy[i] = image[i + w] - image[i];
-        }
-    }
-}
-
 __device__ __host__ float huber(float s, float epsilon)
 {
     return 1.0F / max(epsilon, s);
 }
 
-__global__ void compute_P(float *vx, float *vy, int w, int h, int nc, float epsilon)
+__global__ void compute_P(float *image, float *vx, float *vy, int w, int h, int nc, float epsilon)
 {
     int x = threadIdx.x + blockDim.x * blockIdx.x;
     int y = threadIdx.y + blockDim.y * blockIdx.y;
     if (x < w && y < h) {
-        float g = 0;
+        float ux[3], uy[3];
+        float G2 = 0;
         for (int c = 0; c < nc; c++) {
-            float ux = vx[x + y*w + w*h*c];
-            float uy = vy[x + y*w + w*h*c];
-            g += ux*ux + uy*uy;
+            int i = x + w*y + w*h*c;
+            ux[c] = ((x < w-1) ? (image[i + 1] - image[i]) : 0);
+            uy[c] = ((y < h-1) ? (image[i + w] - image[i]) : 0);
+            G2 += ux[c]*ux[c] + uy[c]*uy[c];
         }
-        g = huber(sqrtf(g), epsilon);
 
+        float g = huber(sqrtf(G2), epsilon);
         for (int c = 0; c < nc; c++) {
-            vx[x + y*w + w*h*c] *= g;
-            vy[x + y*w + w*h*c] *= g;
+            int i = x + w*y + w*h*c;
+            vx[i] = g * ux[c];
+            vy[i] = g * uy[c];
         }
     }
 }
@@ -258,8 +240,7 @@ int main(int argc, char **argv)
     cudaMemcpy(d_image, imgIn, imageBytes, cudaMemcpyHostToDevice);
 
     for (int n = 0; n < N; n++) {
-        gradient<<< grid, block >>>(d_image, d_vx, d_vy, w, h, nc);
-        compute_P<<< grid, block >>>(d_vx, d_vy, w, h, nc, epsilon);
+        compute_P<<< grid, block >>>(d_image, d_vx, d_vy, w, h, nc, epsilon);
         divergence_and_update<<< grid, block >>>(d_image, d_vx, d_vy, w, h, nc, tau);
     }
 
