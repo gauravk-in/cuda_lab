@@ -4,3 +4,5 @@ image_result.png
 *.swp
 *.cproject
 *.project
+*.settings
+*.settings/*
