@@ -49,74 +49,52 @@ __device__ __host__ T clamp(T m, T x, T M)
 }
 
 
-__global__ void gradient(float *image, float *vx, float *vy, int w, int h, int nc)
-{
-    int x = threadIdx.x + blockDim.x * blockIdx.x;
-    int y = threadIdx.y + blockDim.y * blockIdx.y;
-    if (x < w && y < h) {
-        for (int c = 0; c < nc; c++) {
-            int i = x + w*y + w*h*c;
-
-            if (x == w-1)
-                vx[i] = 0;
-            else
-                vx[i] = image[i + 1] - image[i];
-
-            if (y == h-1)
-                vy[i] = 0;
-            else
-                vy[i] = image[i + w] - image[i];
-        }
-    }
-}
-
 __device__ __host__ float huber(float s, float epsilon)
 {
     return 1.0F / max(epsilon, s);
+    //return 1.0F;
+    //return expf(-s*s / epsilon) / epsilon;
 }
 
-__global__ void compute_P(float *vx, float *vy, int w, int h, int nc, float epsilon)
+__global__ void compute_P(float *image, float *Px, float *Py, int w, int h, int nc, float epsilon)
 {
     int x = threadIdx.x + blockDim.x * blockIdx.x;
     int y = threadIdx.y + blockDim.y * blockIdx.y;
-    if (x < w && y < h) {
-        float g = 0;
-        for (int c = 0; c < nc; c++) {
-            float ux = vx[x + y*w + w*h*c];
-            float uy = vy[x + y*w + w*h*c];
-            g += ux*ux + uy*uy;
-        }
-        g = huber(sqrtf(g), epsilon);
+    extern __shared__ float sh_u[];
 
+    if (x < w && y < h) {
+        int b = threadIdx.x + blockDim.x * threadIdx.y;
+        int B = blockDim.x * blockDim.y;
+
+        float G2 = 0;
         for (int c = 0; c < nc; c++) {
-            vx[x + y*w + w*h*c] *= g;
-            vy[x + y*w + w*h*c] *= g;
+            int i = x + w*y + w*h*c;
+            float ux = ((x < w-1) ? (image[i + 1] - image[i]) : 0);
+            float uy = ((y < h-1) ? (image[i + w] - image[i]) : 0);
+            sh_u[b + B*c + B*nc*0] = ux;
+            sh_u[b + B*c + B*nc*1] = uy;
+            G2 += ux*ux + uy*uy;
+        }
+
+        float g = huber(sqrtf(G2), epsilon);
+        for (int c = 0; c < nc; c++) {
+            int i = x + w*y + w*h*c;
+            Px[i] = g * sh_u[b + B*c + B*nc*0];
+            Py[i] = g * sh_u[b + B*c + B*nc*1];
         }
     }
 }
 
-__global__ void divergence(float *u1, float *u2, float *div, int w, int h, int nc)
+__global__ void divergence_and_update(float *image, float *Px, float *Py, int w, int h, int nc, float tau)
 {
     int x = threadIdx.x + blockDim.x * blockIdx.x;
     int y = threadIdx.y + blockDim.y * blockIdx.y;
     if (x < w && y < h) {
         for (int c = 0; c < nc; c++) {
             int i = x + w*y + w*h*c;
-            float dx_u1 = u1[i] - ((x > 0) ? u1[i - 1] : 0);
-            float dy_u2 = u2[i] - ((y > 0) ? u2[i - w] : 0);
-            div[i] = dx_u1 + dy_u2;
-        }
-    }
-}
-
-__global__ void update(float *image, float *dir, int w, int h, int nc, float tau)
-{
-    int x = threadIdx.x + blockDim.x * blockIdx.x;
-    int y = threadIdx.y + blockDim.y * blockIdx.y;
-    if (x < w && y < h) {
-        for (int c = 0; c < nc; c++) {
-            int i = x + w*y + w*h*c;
-            image[i] += tau * dir[i];
+            float dx_u1 = Px[i] - ((x > 0) ? Px[i - 1] : 0);
+            float dy_u2 = Py[i] - ((y > 0) ? Py[i - w] : 0);
+            image[i] += tau * (dx_u1 + dy_u2);
         }
     }
 }
@@ -261,27 +239,24 @@ int main(int argc, char **argv)
 
     dim3 block(32, 16);
     dim3 grid = make_grid(dim3(w, h, 1), block);
+    size_t smBytes = (size_t)block.x*block.y*nc*2*sizeof(float);
 
     Timer timer; timer.start();
-    float *d_image, *d_vx, *d_vy, *d_div;
+    float *d_image, *d_Px, *d_Py;
     cudaMalloc(&d_image, imageBytes);
-    cudaMalloc(&d_vx, imageBytes);
-    cudaMalloc(&d_vy, imageBytes);
-    cudaMalloc(&d_div, imageBytes);
+    cudaMalloc(&d_Px, imageBytes);
+    cudaMalloc(&d_Py, imageBytes);
     cudaMemcpy(d_image, imgIn, imageBytes, cudaMemcpyHostToDevice);
 
     for (int n = 0; n < N; n++) {
-        gradient<<< grid, block >>>(d_image, d_vx, d_vy, w, h, nc);
-        compute_P<<< grid, block >>>(d_vx, d_vy, w, h, nc, epsilon);
-        divergence<<< grid, block >>>(d_vx, d_vy, d_div, w, h, nc);
-        update<<< grid, block >>>(d_image, d_div, w, h, nc, tau);
+        compute_P<<< grid, block, smBytes >>>(d_image, d_Px, d_Py, w, h, nc, epsilon);
+        divergence_and_update<<< grid, block >>>(d_image, d_Px, d_Py, w, h, nc, tau);
     }
 
     cudaMemcpy(imgOut, d_image, imageBytes, cudaMemcpyDeviceToHost);
     cudaFree(d_image);
-    cudaFree(d_vx);
-    cudaFree(d_vy);
-    cudaFree(d_div);
+    cudaFree(d_Px);
+    cudaFree(d_Py);
     timer.end();  float t = timer.get();  // elapsed time in seconds
     cout << "time: " << t*1000 << " ms" << endl;
 
