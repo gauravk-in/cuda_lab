@@ -256,17 +256,15 @@ int main(int argc, char **argv)
         }
     }
 #else
+	for(int rep = 0; rep < repeats; rep++)
+	{
     float *d_in, *d_out, *d_kern;
     size_t nbytes = (size_t)w*h*nc*sizeof(float);
     cudaMalloc(&d_in, nbytes);
-    CUDA_CHECK;
     cudaMalloc(&d_out, nbytes);
-    CUDA_CHECK;
     cudaMalloc(&d_kern, (size_t)ksize*ksize*sizeof(float));
-    CUDA_CHECK;
     cudaMemcpy(d_in, imgIn, nbytes, cudaMemcpyHostToDevice);
     cudaMemcpy(d_kern, kern, (size_t)ksize*ksize*sizeof(float), cudaMemcpyHostToDevice);
-    CUDA_CHECK;
     dim3 block(16, 8, 1);
     dim3 grid = make_grid(dim3(w, h*nc, 1), block);
     // Define texture attributes
@@ -280,21 +278,16 @@ int main(int argc, char **argv)
     cudaBindTexture2D(NULL, &texRef, d_in, &desc, w, h*nc, w*sizeof(d_in[0]));
 
     convolution<<<grid, block>>>(d_in, d_out, d_kern, w, h, nc, r);
-    CUDA_CHECK;
     cudaMemcpy(imgOut, d_out, nbytes, cudaMemcpyDeviceToHost);
-    CUDA_CHECK;
     // unbind texture
     cudaUnbindTexture(texRef);
-    CUDA_CHECK;
     cudaFree(d_in);
-    CUDA_CHECK;
     cudaFree(d_out);
-    CUDA_CHECK;
     cudaFree(d_kern);
-    CUDA_CHECK;
+	}
 #endif
     timer.end();  float t = timer.get();  // elapsed time in seconds
-    cout << "time: " << t*1000 << " ms" << endl;
+    cout << "time: " << t*1000/repeats << " ms" << endl;
 
 
 
