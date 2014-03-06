@@ -95,7 +95,7 @@ __global__ void compute_P(float *vx, float *vy, int w, int h, int nc, float epsi
     }
 }
 
-__global__ void divergence(float *u1, float *u2, float *div, int w, int h, int nc)
+__global__ void divergence_and_update(float *image, float *u1, float *u2, int w, int h, int nc, float tau)
 {
     int x = threadIdx.x + blockDim.x * blockIdx.x;
     int y = threadIdx.y + blockDim.y * blockIdx.y;
@@ -104,19 +104,7 @@ __global__ void divergence(float *u1, float *u2, float *div, int w, int h, int n
             int i = x + w*y + w*h*c;
             float dx_u1 = u1[i] - ((x > 0) ? u1[i - 1] : 0);
             float dy_u2 = u2[i] - ((y > 0) ? u2[i - w] : 0);
-            div[i] = dx_u1 + dy_u2;
-        }
-    }
-}
-
-__global__ void update(float *image, float *dir, int w, int h, int nc, float tau)
-{
-    int x = threadIdx.x + blockDim.x * blockIdx.x;
-    int y = threadIdx.y + blockDim.y * blockIdx.y;
-    if (x < w && y < h) {
-        for (int c = 0; c < nc; c++) {
-            int i = x + w*y + w*h*c;
-            image[i] += tau * dir[i];
+            image[i] += tau * (dx_u1 + dy_u2);
         }
     }
 }
@@ -263,25 +251,22 @@ int main(int argc, char **argv)
     dim3 grid = make_grid(dim3(w, h, 1), block);
 
     Timer timer; timer.start();
-    float *d_image, *d_vx, *d_vy, *d_div;
+    float *d_image, *d_vx, *d_vy;
     cudaMalloc(&d_image, imageBytes);
     cudaMalloc(&d_vx, imageBytes);
     cudaMalloc(&d_vy, imageBytes);
-    cudaMalloc(&d_div, imageBytes);
     cudaMemcpy(d_image, imgIn, imageBytes, cudaMemcpyHostToDevice);
 
     for (int n = 0; n < N; n++) {
         gradient<<< grid, block >>>(d_image, d_vx, d_vy, w, h, nc);
         compute_P<<< grid, block >>>(d_vx, d_vy, w, h, nc, epsilon);
-        divergence<<< grid, block >>>(d_vx, d_vy, d_div, w, h, nc);
-        update<<< grid, block >>>(d_image, d_div, w, h, nc, tau);
+        divergence_and_update<<< grid, block >>>(d_image, d_vx, d_vy, w, h, nc, tau);
     }
 
     cudaMemcpy(imgOut, d_image, imageBytes, cudaMemcpyDeviceToHost);
     cudaFree(d_image);
     cudaFree(d_vx);
     cudaFree(d_vy);
-    cudaFree(d_div);
     timer.end();  float t = timer.get();  // elapsed time in seconds
     cout << "time: " << t*1000 << " ms" << endl;
 
