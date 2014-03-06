@@ -52,114 +52,80 @@ __device__ T gpu_max(T a, T b)
 		return a;
 }
 
+__device__ void compute_tensor( float* m11, float* m12, float* m22, float* tensor, int w, int h, int nc) {
+
+
+}
+
 __device__ void compute_matrices(float* der_x, float* der_y, float* m11, float* m12, float* m22,
-		int w, int h, int nc) {
+								int w, int h, int nc) {
 	int ix = threadIdx.x + blockDim.x * blockIdx.x;
 	int iy = threadIdx.y + blockDim.y * blockIdx.y;
 	int iz = threadIdx.z + blockDim.z * blockIdx.z;
 
-	size_t idx = ix + (iy * w) + (iz * w * h);
+
 
 	// Only the first nc (ex. Red) slice 2D id. Make simultaneous
 	// updates on this from all threads over different nc.
 	size_t idx_2d = ix + (iy * w);
 
-	if (ix < w && iy < h && iz < nc) {
+	if (ix < w && iy < h && iz ==0) {
 		// store global memory accesses in temporary variables
-		float temp_dx, temp_dy;
-		temp_dx = der_x[idx];
-		temp_dy = der_y[idx];
-
-		// add contribution of this 'nc' to the M matrix components
-		m11[idx_2d] += temp_dx * temp_dx;
-		m12[idx_2d] += temp_dx * temp_dy;
-		m22[idx_2d] += temp_dy * temp_dy;
-	}
-}
-
-
-// X and Y derivative
-__device__ void derivatives(float* imgConvolved, float* der_x, float* der_y, int w, int h, int nc) {
-	int ix = threadIdx.x + blockDim.x * blockIdx.x;
-	int iy = threadIdx.y + blockDim.y * blockIdx.y;
-	int iz = threadIdx.z + blockDim.z * blockIdx.z;
-
-	// Index of the output image, this kernel works on
-	size_t idx = ix + (iy * w) + (iz * w * h);
-
-	// check limits
-	if (ix < w && iy < h && iz < nc)
-	{
-		float valuex = 0.0f;
-		float valuey = 0.0f;
-
-		// x+1 index inxp, x-1 index inxm. Similarly y+1 index inyp, y-1 index inym
-		int ixp = gpu_min(ix+1, w-1);
-		int ixm = gpu_max(ix-1, 0);
-		int iyp = gpu_min(iy+1, h-1);
-		int iym = gpu_max(iy-1, 0);
-
-		// store repeated accesses to global memory here as temps
-		float temp_xpyp, temp_xpym, temp_xmym, temp_xmyp;
-		temp_xpyp = imgConvolved[ixp + (iyp * w) + (iz * w * h)];
-		temp_xpym = imgConvolved[ixp + (iym * w) + (iz * w * h)];
-		temp_xmyp = imgConvolved[ixm + (iyp * w) + (iz * w * h)];
-		temp_xmym = imgConvolved[ixm + (iym * w) + (iz * w * h)];
-
-		valuex = 3 * temp_xpyp +
-				10 * imgConvolved[ixp + (iy * w) + (iz * w * h)] +
-				3 * temp_xpym -
-				3 * temp_xmyp -
-				10 * imgConvolved[ixm + (iy * w) + (iz * w * h)] -
-				3 * temp_xmym;
-
-		valuey = 3 * temp_xpyp +
-				10 * imgConvolved[ix + (iyp * w) + (iz * w * h)] +
-				3 * temp_xmyp -
-				3 * temp_xpym -
-				10 * imgConvolved[ix + (iym * w) + (iz * w * h)] -
-				3 * temp_xmym;
-
-		der_x[idx] = valuex / 32.0f;
-		der_y[idx] = valuey / 32.0f;
-	}
-}
-
-__device__ void convolveImage(float* imgIn, float* kernel, float* imgOut, int rad, int w, int h, int nc)
-{
-	int ix = threadIdx.x + blockDim.x * blockIdx.x;
-	int iy = threadIdx.y + blockDim.y * blockIdx.y;
-	int iz = threadIdx.z + blockDim.z * blockIdx.z;
-
-	// Index of the output image, this kernel works on
-	size_t idx = ix + (iy * w) + (iz * w * h);
-	int kw = 2 * rad + 1;
-
-	// check limits
-	if (ix < w && iy < h && iz < nc)
-	{
-		imgOut[idx] = 0;													// initialize
-		float value = 0;
-		for(int j = -rad; j <= rad; j++)									// for each row in kernel
+		float temp_m11 = 0.0f, temp_m22 = 0.0f, temp_m12 = 0.0f;
+		for(int i = 0; i < nc; i++)
 		{
-			int iny = gpu_max(0, gpu_min(iy+j, h-1));
-			for(int i = -rad; i <= rad; i++)								// for each element in the kernel row
-			{
-				int inx = gpu_max(0, gpu_min(ix+i, w-1));
-				int inIdx = inx + (iny * w) + (iz * w * h);					// Index of Input Image to be multiplied by corresponding element in kernel
-				value += imgIn[inIdx] * kernel[i+rad + ((j+rad) * kw)];
-			}
+			size_t idx = ix + (iy * w) + (iz * w * h);
+			float temp_dx, temp_dy;
+			temp_dx = der_x[idx];
+			temp_dy = der_y[idx];
+
+			// add contribution of this 'nc' to the M matrix components
+			temp_m11 += temp_dx * temp_dx;
+			temp_m12 += temp_dx * temp_dy;
+			temp_m22 += temp_dy * temp_dy;
 		}
-		imgOut[idx] = value;
+		m11[idx_2d] = temp_m11;
+		m12[idx_2d] = temp_m12;
+		m22[idx_2d] = temp_m22;
 	}
+}
+
+
+__device__ void convolveImage(float *in, float *kern, float *out,
+		 	 	 	 	 	  int r, int w, int h, int nc) {
+    int ksize = 2*r + 1;
+    int x = threadIdx.x + blockDim.x * blockIdx.x;
+    int y = threadIdx.y + blockDim.y * blockIdx.y;
+    int c = threadIdx.z + blockDim.z * blockIdx.z;
+    if (x < w && y < h && c < nc) {
+        float value = 0.0f;
+        for (int ky = 0; ky < ksize; ky++) {
+            int cy = gpu_max(0, gpu_min(y + ky - r, h-1));
+            for (int kx = 0; kx < ksize; kx++) {
+                int cx = gpu_max(0, gpu_min(x + kx - r, w-1));
+                value += kern[kx + ksize*ky] * in[cx + w*cy + w*h*c];
+            }
+        }
+        out[x + w*y + w*h*c] = value;
+    }
 }
 
 __global__ void callKernel(float* imgIn, float* kernel, float* imgOut, float* v1, float* v2,
-		float* m11, float* m12, float* m22, int rad, int w, int h, int nc)
+		float* m11, float* m12, float* m22, float* mm11, float* mm12, float* mm22,
+		float *diffx_kernel, float *diffy_kernel, int rad, int w, int h, int nc)
 {
 	convolveImage(imgIn, kernel, imgOut, rad, w, h, nc);
-	derivatives(imgOut, v1, v2, w, h, nc);
-	compute_matrices(v1, v2, m11, m12, m22, w, h, nc);
+	// compute x derivatives using convolution
+	convolveImage(imgOut, diffx_kernel, v1, 1, w, h, nc );
+	convolveImage(imgOut, diffy_kernel, v2, 1, w, h, nc );
+
+	// compute the matrices m11, m12 and m22
+	compute_matrices(v1, v2, mm11, mm12, mm22, w, h, nc);
+	convolveImage(mm11, kernel, m11, rad, w, h, 1 );
+	convolveImage(mm12, kernel, m12, rad, w, h, 1 );
+	convolveImage(mm22, kernel, m22, rad, w, h, 1 );
+
+	// convolve the matrices m11, m12 and m22
 
 }
 
@@ -313,6 +279,10 @@ int main(int argc, char **argv)
 		}
 	}
 
+	// Make a new differentiation kernel
+	float diffx_kernel[] = { -3, 0, 3, -10, 0, 10, -3, 0, 3 };
+	float diffy_kernel[] = { -3, -10, -3, 0, 0, 0, 3, 10, 3 };
+
 	// Display Kernel
 	cv::Mat cvKernelOut(kw, kw, CV_32FC1);
 	convert_layered_to_mat(cvKernelOut, kernelOut);
@@ -359,7 +329,7 @@ int main(int argc, char **argv)
 			size_t count = (size_t)w * h * nc;
 
 			// Thread Dimensions
-			dim3 block = dim3(16, 8, nc);
+			dim3 block = dim3(32, 8, nc);
 			dim3 grid = dim3((w + block.x - 1) / block.x, (h + block.y - 1) / block.y, 1);
 
 			// Allocating memory on the device
@@ -367,29 +337,41 @@ int main(int argc, char **argv)
 			float *d_imgOut = NULL;
 			float *d_v1 = NULL;
 			float *d_v2 = NULL;
+			float *d_mm11 = NULL;
+			float *d_mm12 = NULL;
+			float *d_mm22 = NULL;
 			float *d_m11 = NULL;
 			float *d_m12 = NULL;
 			float *d_m22 = NULL;
 			float *d_kernel = NULL;
+			float *d_diffx_kernel = NULL;
+			float *d_diffy_kernel = NULL;
+			float *d_tensor = NULL;
 			cudaMalloc(&d_imgIn, count * sizeof(float));
 			cudaMalloc(&d_imgOut, count * sizeof(float));
 			cudaMalloc(&d_kernel, kw * kw * sizeof(float));
+			cudaMalloc(&d_diffx_kernel, 3 * 3 * sizeof(float));
+			cudaMalloc(&d_diffy_kernel, 3 * 3 * sizeof(float));
 			cudaMalloc(&d_v1, count * sizeof(float));
 			cudaMalloc(&d_v2, count * sizeof(float));
+			cudaMalloc(&d_mm11, w*h * sizeof(float));
+			cudaMalloc(&d_mm12, w*h * sizeof(float));
+			cudaMalloc(&d_mm22, w*h * sizeof(float));
 			cudaMalloc(&d_m11, w*h * sizeof(float));
 			cudaMalloc(&d_m12, w*h * sizeof(float));
 			cudaMalloc(&d_m22, w*h * sizeof(float));
-			cudaMemset(d_m11, 0.0f, w*h);
-			cudaMemset(d_m12, 0.0f, w*h);
-			cudaMemset(d_m22, 0.0f, w*h);
+			cudaMalloc(&d_tensor, w*h*4 * sizeof(float)); // 4 matrix elements of w*h
 
 			// Copying Input image to device, and initializing result to 0
 			cudaMemcpy(d_imgIn, imgIn, count * sizeof(float), cudaMemcpyHostToDevice);
 			cudaMemcpy(d_kernel, kernel, kw * kw * sizeof(float), cudaMemcpyHostToDevice);
+			cudaMemcpy(d_diffx_kernel, diffx_kernel, 3 * 3 * sizeof(float), cudaMemcpyHostToDevice);
+			cudaMemcpy(d_diffy_kernel, diffy_kernel, 3 * 3 * sizeof(float), cudaMemcpyHostToDevice);
 
 			// Calling gaussian smoothing kernel
 			callKernel <<< grid, block >>> (d_imgIn, d_kernel, d_imgOut, d_v1, d_v2,
-					d_m11, d_m12, d_m22, rad, w, h, nc);
+					d_m11, d_m12, d_m22, d_mm11, d_mm12, d_mm22,
+					d_diffx_kernel, d_diffy_kernel, rad, w, h, nc);
 
 			// Copying result back
 			cudaMemcpy(m11, d_m11, w * h * sizeof(float), cudaMemcpyDeviceToHost);
@@ -402,12 +384,18 @@ int main(int argc, char **argv)
 			// Freeing Memory
 			cudaFree(d_imgIn);
 			cudaFree(d_kernel);
+			cudaFree(d_diffx_kernel);
+			cudaFree(d_diffy_kernel);
 			cudaFree(d_imgOut);
 			cudaFree(d_v1);
 			cudaFree(d_v2);
 			cudaFree(d_m11);
 			cudaFree(d_m12);
 			cudaFree(d_m22);
+			cudaFree(d_mm11);
+			cudaFree(d_mm12);
+			cudaFree(d_mm22);
+
 		}
 
 		timer.end();
@@ -423,7 +411,7 @@ int main(int argc, char **argv)
 		// showImage("Output", mOut, 100+w+40, 100);
 
 		// ### Display your own output images here as needed
-		int factor = 100000;
+		int factor = 40;
 		convert_layered_to_mat(img_m11, m11);
 		img_m11 *= factor;
 		showImage("M11", img_m11, 100, 400 );
