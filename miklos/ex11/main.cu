@@ -52,6 +52,8 @@ __device__ __host__ T clamp(T m, T x, T M)
 __device__ __host__ float huber(float s, float epsilon)
 {
     return 1.0F / max(epsilon, s);
+    //return 1.0F;
+    //return expf(-s*s / epsilon) / epsilon;
 }
 
 __global__ void compute_P(float *image, float *Px, float *Py, int w, int h, int nc, float epsilon)
