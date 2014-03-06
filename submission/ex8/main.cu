@@ -297,8 +297,8 @@ int main(int argc, char **argv)
     float *imgOut12 = new float[(size_t)w*h*mOut12.channels()];
     float *imgOut22 = new float[(size_t)w*h*mOut22.channels()];
 
-    float dx_kern[] = { -3, 0, 3, -10, 0, 10, -3, 0, 3 };
-    float dy_kern[] = { -3, -10, -3, 0, 0, 0, 3, 10, 3 };
+    float dx_kern[] = { -3.0/32, 0, 3.0/32, -10.0/32, 0, 10.0/32, -3.0/32, 0, 3.0/32 };
+    float dy_kern[] = { -3.0/32, -10.0/32, -3.0/32, 0, 0, 0, 3.0/32, 10.0/32, 3.0/32 };
 
     // For camera mode: Make a loop to read in camera frames
 #ifdef CAMERA

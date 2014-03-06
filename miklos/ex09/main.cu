@@ -309,8 +309,8 @@ int main(int argc, char **argv)
     cout << "shared memory: " << smBytes << " bytes" << endl;
 #endif
 
-    float dx_kern[] = { -3, 0, 3, -10, 0, 10, -3, 0, 3 };
-    float dy_kern[] = { -3, -10, -3, 0, 0, 0, 3, 10, 3 };
+    float dx_kern[] = { -3.0/32, 0, 3.0/32, -10.0/32, 0, 10.0/32, -3.0/32, 0, 3.0/32 };
+    float dy_kern[] = { -3.0/32, -10.0/32, -3.0/32, 0, 0, 0, 3.0/32, 10.0/32, 3.0/32 };
 
     // For camera mode: Make a loop to read in camera frames
 #ifdef CAMERA
