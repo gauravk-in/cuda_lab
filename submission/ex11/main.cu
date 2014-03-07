@@ -68,7 +68,7 @@ __global__ void compute_P(float *image, float *Px, float *Py, int w, int h, int 
 
         float G2 = 0;
         for (int c = 0; c < nc; c++) {
-            int i = x + w*y + w*h*c;
+            int i = x + (size_t)w*y + (size_t)w*h*c;
             float ux = ((x < w-1) ? (image[i + 1] - image[i]) : 0);
             float uy = ((y < h-1) ? (image[i + w] - image[i]) : 0);
             sh_u[b + B*c + B*nc*0] = ux;
@@ -78,7 +78,7 @@ __global__ void compute_P(float *image, float *Px, float *Py, int w, int h, int 
 
         float g = huber(sqrtf(G2), epsilon);
         for (int c = 0; c < nc; c++) {
-            int i = x + w*y + w*h*c;
+            int i = x + (size_t)w*y + (size_t)w*h*c;
             Px[i] = g * sh_u[b + B*c + B*nc*0];
             Py[i] = g * sh_u[b + B*c + B*nc*1];
         }
@@ -91,9 +91,9 @@ __global__ void divergence_and_update(float *image, float *Px, float *Py, int w,
     int y = threadIdx.y + blockDim.y * blockIdx.y;
     if (x < w && y < h) {
         for (int c = 0; c < nc; c++) {
-            int i = x + w*y + w*h*c;
-            float dx_u1 = Px[i] - ((x > 0) ? Px[i - 1] : 0);
-            float dy_u2 = Py[i] - ((y > 0) ? Py[i - w] : 0);
+            int i = x + (size_t)w*y + (size_t)w*h*c;
+            float dx_u1 = ((x+1 < w) ? Px[i] : 0) - ((x > 0) ? Px[i - 1] : 0);
+            float dy_u2 = ((y+1 < h) ? Py[i] : 0) - ((y > 0) ? Py[i - w] : 0);
             image[i] += tau * (dx_u1 + dy_u2);
         }
     }
