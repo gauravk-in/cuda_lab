@@ -34,6 +34,14 @@ using namespace std;
 
 #define USING_GPU
 
+int min_pixels( int a, int b) {
+    if ( a < b ) {
+        return a;
+    } else {
+        return b;
+    }
+}
+
 __host__ __device__ float absolute_value ( float2 z ) {
 	return sqrtf((z.x * z.x) + (z.y * z.y));
 }
@@ -51,11 +59,18 @@ __global__ void callKernel(float* imgOut, int width, int height, float2 center, 
 	  int iy = blockIdx.y * blockDim.y + threadIdx.y;  // WIDTH
 	  int ix = blockIdx.x * blockDim.x + threadIdx.x;  // HEIGHT
 	  int idx = iy * width + ix;
-	  if(ix >= width || iy >= height) return;
+      
+      if(ix >= width || iy >= height) return;
+	  int size;
+      if ( width < height )  {
+          size = width;
+      } else {
+          size = height;
+      }
 
 	  float2 c, z;
-	  c.x = ((float)ix / width) * (2.0f * radius) + center.x - radius;
-	  c.y = ((float)iy / height) * (2.0f * radius) + center.y - radius;
+	  c.x = ((float)(ix - ((width - size)/2.0f)) / size) * (2.0f * radius) + center.x - radius;
+	  c.y = ((float)(iy - ((height - size)/2.0f)) / size) * (2.0f * radius) + center.y - radius;
 	  z = c;
 	  int n = 0;
 	  while( (absolute_value(z) < 2.0f) && (n < iterations))
@@ -91,11 +106,13 @@ int main(int argc, char **argv)
 	getParam("height", height, argc, argv);
 	cout << "height = " << height<< endl;
 
-	float2 center = {-0.5f, 0.0f};
+	// float2 center = {-0.5f, 0.0f};
+	float2 center = {-0.773f, 0.1175f};
 //	getParam("center", center, argc, argv);
 //	cout << "center = " << center.x << ", " << center.y << endl;
 
-	float radius = 1.5f;
+	// float radius = 1.5f;
+	 float radius = 0.005f;
 	getParam("radius", radius, argc, argv);
 	cout << "radius = " << radius << endl;
 
