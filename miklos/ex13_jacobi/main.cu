@@ -72,38 +72,34 @@ __global__ void diffusivity(float *U, float *G, int w, int h, int nc, float epsi
     }
 }
 
-__global__ void jacobi_update(float *U, float *F, float *G, int w, int h, int nc, float lambda)
+__global__ void jacobi_update(float *U, float *F, float *G, float *V,
+                              int w, int h, int nc, float lambda)
 {
     int x = threadIdx.x + blockDim.x * blockIdx.x;
     int y = threadIdx.y + blockDim.y * blockIdx.y;
-    for (int c = 0; c < nc; c++) {
-        float gu = 0, g = 0;
-        if (x < w && y < h) {
-            int i = x + (size_t)w*y;
-            int j = x + (size_t)w*y + (size_t)w*h*c;
-            if (x+1 < w) {  // g_r
-                gu += G[i + 1] * U[j + 1];
-                g  += G[i + 1];
-            }
-            if (x > 0) {  // g_l
-                gu += G[i - 1] * U[j - 1];
-                g  += G[i - 1];
-            }
-            if (y+1 < h) {  // g_u
-                gu += G[i + w] * U[j + w];
-                g  += G[i + w];
-            }
-            if (y > 0) {  // g_d
-                gu += G[i - w] * U[j - w];
-                g  += G[i - w];
-            }
-        }
+    if (x < w && y < h) {
+        int i = x + (size_t)w*y;
 
-        __syncthreads();
+        float g_r = ((x+1 < w) ? G[i + 1] : 0);
+        float g_l = ((x   > 0) ? G[i - 1] : 0);
+        float g_u = ((y+1 < h) ? G[i + w] : 0);
+        float g_d = ((y   > 0) ? G[i - w] : 0);
+        float g = g_r + g_l + g_u + g_d;
 
-        if (x < w && y < h) {
+        for (int c = 0; c < nc; c++) {
             int j = x + (size_t)w*y + (size_t)w*h*c;
-            U[j] = (2 * F[j] + lambda * gu) / (2 + lambda * g);
+
+            float gu = 0.0;
+            if (g_r)
+                gu += g_r * U[j + 1];
+            if (g_l)
+                gu += g_l * U[j - 1];
+            if (g_u)
+                gu += g_u * U[j + w];
+            if (g_d)
+                gu += g_d * U[j - w];
+
+            V[j] = (2 * F[j] + lambda * gu) / (2 + lambda * g);
         }
     }
 }
@@ -166,7 +162,7 @@ int main(int argc, char **argv)
     getParam("lambda", lambda, argc, argv);
     cout << "λ: " << lambda << endl;
 
-    int N = 120;
+    int N = 140;
     getParam("N", N, argc, argv);
     cout << "N: " << N << endl;
 
@@ -255,8 +251,9 @@ int main(int argc, char **argv)
     dim3 grid = make_grid(dim3(w, h, 1), block);
 
     Timer timer; timer.start();
-    float *d_U, *d_F, *d_G;
+    float *d_U, *d_V, *d_F, *d_G;
     cudaMalloc(&d_U, imageBytes);
+    cudaMalloc(&d_V, imageBytes);
     cudaMalloc(&d_F, imageBytes);
     cudaMalloc(&d_G, (size_t)w*h*sizeof(float));
     cudaMemcpy(d_U, imgIn, imageBytes, cudaMemcpyHostToDevice);
@@ -264,11 +261,13 @@ int main(int argc, char **argv)
 
     for (int n = 0; n < N; n++) {
         diffusivity<<< grid, block >>>(d_U, d_G, w, h, nc, epsilon);
-        jacobi_update<<< grid, block >>>(d_U, d_F, d_G, w, h, nc, lambda);
+        jacobi_update<<< grid, block >>>(d_U, d_F, d_G, d_V, w, h, nc, lambda);
+        std::swap(d_U, d_V);
     }
 
     cudaMemcpy(imgOut, d_U, imageBytes, cudaMemcpyDeviceToHost);
     cudaFree(d_U);
+    cudaFree(d_V);
     cudaFree(d_F);
     cudaFree(d_G);
     timer.end();  float t = timer.get();  // elapsed time in seconds
