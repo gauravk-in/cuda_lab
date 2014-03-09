@@ -1,0 +1,7 @@
+The inpainting seems to complete at 600 iterations with Huber Regularization.
+Actually there is a limited aritfact even at 800 and 1000 iterations.
+
+Comparison of Huber and Quadratic Regularization
+ * With Quadratic, we can alredy see a significant change in 100 iterations, the change is 
+   gradual with Huber Regularization. 
+ * At iterations > 600, the output seems almost same for each.
