@@ -69,7 +69,7 @@ __global__ void findGreen(float* imgIn, float* imgOut, bool* d_mask, size_t n_pi
 __device__ __host__ float huber(float s, float epsilon)
 {
     return 1.0F / max(epsilon, s);
-    //return 1.0F;
+//    return 1.0F;
     //return expf(-s*s / epsilon) / epsilon;
 }
 
@@ -171,7 +171,7 @@ int main(int argc, char **argv)
     getParam("tau", tau, argc, argv);
     cout << "τ: " << tau << endl;
 
-    int N = 800;
+    int N = 1000;
     getParam("N", N, argc, argv);
     cout << "N: " << N << endl;
 
