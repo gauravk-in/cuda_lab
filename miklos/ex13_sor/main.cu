@@ -73,7 +73,7 @@ __global__ void diffusivity(float *U, float *G, int w, int h, int nc, float epsi
 }
 
 __global__ void sor_update(float *U, float *F, float *G, int w, int h, int nc,
-                           float lambda, int color)
+                           float lambda, float theta, int color)
 {
     int x = threadIdx.x + blockDim.x * blockIdx.x;
     int y = threadIdx.y + blockDim.y * blockIdx.y;
@@ -99,7 +99,8 @@ __global__ void sor_update(float *U, float *F, float *G, int w, int h, int nc,
             if (g_d)
                 gu += g_d * U[j - w];
 
-            U[j] = (2 * F[j] + lambda * gu) / (2 + lambda * g);
+            float z = (2 * F[j] + lambda * gu) / (2 + lambda * g);
+            U[j] = z + theta * (z - U[j]);
         }
     }
 }
@@ -162,7 +163,11 @@ int main(int argc, char **argv)
     getParam("lambda", lambda, argc, argv);
     cout << "λ: " << lambda << endl;
 
-    int N = 60;
+    float theta = 0.9;
+    getParam("theta", theta, argc, argv);
+    cout << "θ: " << theta << endl;
+
+    int N = 40;
     getParam("N", N, argc, argv);
     cout << "N: " << N << endl;
 
@@ -260,8 +265,8 @@ int main(int argc, char **argv)
 
     for (int n = 0; n < N; n++) {
         diffusivity<<< grid, block >>>(d_U, d_G, w, h, nc, epsilon);
-        sor_update<<< grid, block >>>(d_U, d_F, d_G, w, h, nc, lambda, 0);
-        sor_update<<< grid, block >>>(d_U, d_F, d_G, w, h, nc, lambda, 1);
+        sor_update<<< grid, block >>>(d_U, d_F, d_G, w, h, nc, lambda, theta, 0);
+        sor_update<<< grid, block >>>(d_U, d_F, d_G, w, h, nc, lambda, theta, 1);
     }
 
     cudaMemcpy(imgOut, d_U, imageBytes, cudaMemcpyDeviceToHost);
