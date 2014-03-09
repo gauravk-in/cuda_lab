@@ -58,7 +58,7 @@ __host__ __device__ float2 square_complex ( float2 z ) {
 __global__ void callKernel(float* imgOut, int width, int height, float2 center, float radius, int iterations) {
 	  int iy = blockIdx.y * blockDim.y + threadIdx.y;  // WIDTH
 	  int ix = blockIdx.x * blockDim.x + threadIdx.x;  // HEIGHT
-	  int idx = iy * width + ix;
+	  size_t idx =(size_t) iy * width + ix;
       
       if(ix >= width || iy >= height) return;
 	  int size;
@@ -106,7 +106,7 @@ int main(int argc, char **argv)
 	getParam("height", height, argc, argv);
 	cout << "height = " << height<< endl;
 
-	// float2 center = {-0.5f, 0.0f};
+//	 float2 center = {-0.5f, 0.0f};
 	float2 center = {-0.773f, 0.1175f};
 //	getParam("center", center, argc, argv);
 //	cout << "center = " << center.x << ", " << center.y << endl;
