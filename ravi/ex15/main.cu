@@ -88,7 +88,7 @@ __global__ void compute_g(float *image, float *g, int w, int h, int nc, float ep
     }
 }
 
-__global__ void rb_gs_update(float *image, float *g, bool* mask, int w, int h, int nc, float lambda, float theta, int red_black)
+__global__ void rb_gs_update(float *image, float *g, bool* mask, int w, int h, int nc, float theta, int red_black)
 {
     int x = threadIdx.x + blockDim.x * blockIdx.x;
     int y = threadIdx.y + blockDim.y * blockIdx.y;
@@ -110,7 +110,7 @@ __global__ void rb_gs_update(float *image, float *g, bool* mask, int w, int h, i
     				((x) > 0 ? 1.0f : 0.0f) * (g[idx_2d - 1]) +
     				((y+1) < (h) ? 1.0f : 0.0f) * (g[idx_2d + w]) +
     				((y) > 0 ? 1.0f : 0.0f ) * (g[idx_2d - w]);
-            float gs_result = ( (lambda * gsum_u)) / ( (lambda * gsum) );
+            float gs_result = gsum_u / gsum;
 
             // SOR step
             image[idx] = gs_result + theta * ( gs_result - temp_uxy );
@@ -157,11 +157,7 @@ int main(int argc, char **argv)
     getParam("sigma", sigma, argc, argv);
     cout << "σ: " << sigma << endl;
 
-    float lambda = 0.2;
-    getParam("lambda", lambda, argc, argv);
-    cout << "lambda: " << lambda << endl;
-
-    float theta = 0.8;
+    float theta = 0.7;
     getParam("theta", theta, argc, argv);
     cout << "theta: " << theta << endl;
 
@@ -169,7 +165,7 @@ int main(int argc, char **argv)
     getParam("epsilon", epsilon, argc, argv);
     cout << "ε: " << epsilon << endl;
 
-    int N = 100;
+    int N = 150;
     getParam("N", N, argc, argv);
     cout << "N: " << N << endl;
 
@@ -295,8 +291,8 @@ int main(int argc, char **argv)
 
         for (int n = 0; n < N; n++) {
             compute_g<<< grid, block, smBytes >>>(d_imgIn, d_g, w, h, nc, epsilon);
-            rb_gs_update<<< grid, block >>>(d_imgIn, d_g, d_mask, w, h, nc, lambda, theta, 0);
-            rb_gs_update<<< grid, block >>>(d_imgIn, d_g, d_mask, w, h, nc, lambda, theta, 1);
+            rb_gs_update<<< grid, block >>>(d_imgIn, d_g, d_mask, w, h, nc, theta, 0);
+            rb_gs_update<<< grid, block >>>(d_imgIn, d_g, d_mask, w, h, nc, theta, 1);
         }
         
         // Copying result back
