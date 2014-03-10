@@ -68,9 +68,9 @@ __global__ void findGreen(float* imgIn, float* imgOut, bool* d_mask, size_t n_pi
 
 __device__ __host__ float huber(float s, float epsilon)
 {
-    return 1.0F / max(epsilon, s);
-//    return 1.0F;
-    //return expf(-s*s / epsilon) / epsilon;
+    return 1.0F / max(epsilon, s);                  //huber
+    // return 1.0F;                                 // quadratic
+   // return expf(-s*s / epsilon) / epsilon;        // exponential
 }
 
 __global__ void compute_P(float *image, float *Px, float *Py, int w, int h, int nc, float epsilon)

@@ -33,11 +33,17 @@ using namespace std;
 
 #define USING_GPU
 
+__device__ __host__ float huber(float s, float epsilon)
+{
+    return 1.0F / max(epsilon, s);
+    //return 1.0F;
+    //return expf(-s*s / epsilon) / epsilon;
+}
 
 // This function finds green colored pixels in the image
 // It outputs a bool array mask, which tells if pixel(x, y) is green
 // It also sets the green pixel value to (0.5, 0.5, 0.5)
-__global__ void findGreen(float* imgIn, float* imgOut, bool* d_mask, size_t n_pixels, int w, int h, int nc)
+__global__ void findGreen(float* imgIn, bool* d_mask, size_t n_pixels, int w, int h, int nc)
 {
     size_t ix = threadIdx.x + blockDim.x * blockIdx.x;
     size_t iy = threadIdx.y + blockDim.y * blockIdx.y;
@@ -45,84 +51,72 @@ __global__ void findGreen(float* imgIn, float* imgOut, bool* d_mask, size_t n_pi
     if(ix < w && iy < h && nc == 3)
     {
     	// Only the green Layer
-    	size_t b_idx = ix + (iy * w);
-    	size_t g_idx = b_idx + (w * h);
-    	size_t r_idx = g_idx + (w * h);
+    	size_t b_idx = ix + (size_t)(iy * w);
+    	size_t g_idx = b_idx + (size_t)(w * h);
+    	size_t r_idx = g_idx + (size_t)(w * h);
 
     	if(imgIn[g_idx] == 1.0f && imgIn[b_idx] == 0.0f && imgIn[r_idx] == 0.0f)
     	{
     		d_mask[b_idx] = true;
-    		imgOut[b_idx] = 0.5f;							// Blue
-    		imgOut[g_idx] = 0.5f;							// Green
-    		imgOut[r_idx] = 0.5f;							// Red
+    		imgIn[b_idx] = 0.5f;							// Blue
+    		imgIn[g_idx] = 0.5f;							// Green
+    		imgIn[r_idx] = 0.5f;							// Red
     	}
     	else
     	{
     		d_mask[b_idx] = false;
-    		imgOut[b_idx] = imgIn[b_idx];					// Blue
-    		imgOut[g_idx] = imgIn[g_idx];					// Green
-    		imgOut[r_idx] = imgIn[r_idx];					// Red
     	}
     }
 }
 
-__device__ __host__ float huber(float s, float epsilon)
-{
-    return 1.0F / max(epsilon, s);                  //huber
-    // return 1.0F;                                 // quadratic
-   // return expf(-s*s / epsilon) / epsilon;        // exponential
-}
-
-__global__ void compute_P(float *image, float *Px, float *Py, int w, int h, int nc, float epsilon)
+__global__ void compute_g(float *image, float *g, int w, int h, int nc, float epsilon)
 {
     int x = threadIdx.x + blockDim.x * blockIdx.x;
     int y = threadIdx.y + blockDim.y * blockIdx.y;
-    extern __shared__ float sh_u[];
 
     if (x < w && y < h) {
-        int b = threadIdx.x + blockDim.x * threadIdx.y;
-        int B = blockDim.x * blockDim.y;
 
-        float G2 = 0;
+        float G2 = 0.0f;
         for (int c = 0; c < nc; c++) {
-            int i = x + w*y + w*h*c;
-            float ux = ((x < w-1) ? (image[i + 1] - image[i]) : 0);
-            float uy = ((y < h-1) ? (image[i + w] - image[i]) : 0);
-            sh_u[b + B*c + B*nc*0] = ux;
-            sh_u[b + B*c + B*nc*1] = uy;
+            size_t idx = x + (size_t)w*y + (size_t)w*h*c;
+            float ux = ((x < w-1) ? (image[idx + 1] - image[idx]) : 0);
+            float uy = ((y < h-1) ? (image[idx + w] - image[idx]) : 0);
             G2 += ux*ux + uy*uy;
         }
 
-        float g = huber(sqrtf(G2), epsilon);
-        for (int c = 0; c < nc; c++) {
-            int i = x + w*y + w*h*c;
-            Px[i] = g * sh_u[b + B*c + B*nc*0];
-            Py[i] = g * sh_u[b + B*c + B*nc*1];
-        }
+        g[x + (size_t) w*y] = huber(sqrtf(G2), epsilon);
     }
 }
 
-__global__ void divergence_and_update(float *image, float *Px, float *Py, int w, int h, int nc, float tau, bool* mask)
+__global__ void rb_gs_update(float *image, float *g, bool* mask, int w, int h, int nc, float theta, int red_black)
 {
     int x = threadIdx.x + blockDim.x * blockIdx.x;
     int y = threadIdx.y + blockDim.y * blockIdx.y;
-    if (x < w && y < h) {
-    	if(mask[x + w*y])
-    	{
-			for (int c = 0; c < nc; c++) {
-				int i = x + w*y + w*h*c;
-				float dx_u1 = Px[i] - ((x > 0) ? Px[i - 1] : 0);
-				float dy_u2 = Py[i] - ((y > 0) ? Py[i - w] : 0);
-				image[i] += tau * (dx_u1 + dy_u2);
-			}
-    	}
+    if( ((x + y) % 2) != red_black) {
+    	return;
+    }
+
+    if ( (x < w) && (y < h) && (mask[x + w*y])) {
+        for (int c = 0; c < nc; c++) {
+            size_t idx = x + (size_t)w*y + (size_t)w*h*c;
+            size_t idx_2d = x + (size_t)w*y;
+            float temp_uxy = image[idx];
+            float gsum_u = (((x+1) < (w) ? 1.0f : 0.0f) * (g[idx_2d + 1]) * (image[idx + 1])) +
+    				(((x) > 0 ? 1.0f : 0.0f) * (g[idx_2d - 1]) * ( image[idx - 1])) +
+    				(((y+1) < (h) ? 1.0f : 0.0f) * (g[idx_2d + w]) * ( image[idx + w])) +
+    				(((y) > 0 ? 1.0f : 0.0f ) * (g[idx_2d - w]) * ( image[idx - w]));
+
+            float gsum = ((x+1) < (w) ? 1.0f : 0.0f) * (g[idx_2d + 1]) +
+    				((x) > 0 ? 1.0f : 0.0f) * (g[idx_2d - 1]) +
+    				((y+1) < (h) ? 1.0f : 0.0f) * (g[idx_2d + w]) +
+    				((y) > 0 ? 1.0f : 0.0f ) * (g[idx_2d - w]);
+            float gs_result = gsum_u / gsum;
+
+            // SOR step
+            image[idx] = gs_result + theta * ( gs_result - temp_uxy );
+        }
     }
 }
-
-// __global__ void callKernel(float* imgIn, float* kernel, float* imgOut, int rad, int w, int h, int nc)
-// {
-//     convolveImage(imgIn, kernel, imgOut, rad, w, h, nc);    
-// }
 
 int main(int argc, char **argv)
 {
@@ -158,20 +152,20 @@ int main(int argc, char **argv)
     getParam("gray", gray, argc, argv);
     cout << "gray: " << gray << endl;
 
-    float sigma = 2.0;
-    getParam("sigma", sigma, argc, argv);
-    cout << "sigma = " << sigma << endl;
-
     // ### Define your own parameters here as needed
-    float epsilon = 0.05f;
+    float sigma = 0.1;
+    getParam("sigma", sigma, argc, argv);
+    cout << "σ: " << sigma << endl;
+
+    float theta = 0.7;
+    getParam("theta", theta, argc, argv);
+    cout << "theta: " << theta << endl;
+
+    float epsilon = 0.01;
     getParam("epsilon", epsilon, argc, argv);
     cout << "ε: " << epsilon << endl;
 
-    float tau = 0.2 / huber(0, epsilon);
-    getParam("tau", tau, argc, argv);
-    cout << "τ: " << tau << endl;
-
-    int N = 1000;
+    int N = 150;
     getParam("N", N, argc, argv);
     cout << "N: " << N << endl;
 
@@ -281,16 +275,11 @@ int main(int argc, char **argv)
 
         // Allocating memory on the device
         float *d_imgIn = NULL;
-//        float *d_imgGreen = NULL;
-//        float *d_imgOut = NULL;
         bool *d_mask = NULL;
-        float *d_Px = NULL;
-        float *d_Py = NULL;
+        float *d_g = NULL;
         cudaMalloc(&d_imgIn, count * sizeof(float));
-//        cudaMalloc(&d_imgOut, count * sizeof(float));
         cudaMalloc(&d_mask, (n_pixels * sizeof(bool) + 7) / 8);
-        cudaMalloc(&d_Px, count * sizeof(float));
-        cudaMalloc(&d_Py, count * sizeof(float));
+        cudaMalloc(&d_g, n_pixels * sizeof(float));
         
         cout << "n_pixels = " << n_pixels << "sizeof(bool)" << sizeof(bool) ;
 
@@ -298,11 +287,12 @@ int main(int argc, char **argv)
         cudaMemcpy(d_imgIn, imgIn, count * sizeof(float), cudaMemcpyHostToDevice);
 
         // Calling Kernel
-        findGreen <<<grid, block>>> (d_imgIn, d_imgIn, d_mask, count, w, h, nc);
+        findGreen <<<grid, block>>> (d_imgIn, d_mask, count, w, h, nc);
 
         for (int n = 0; n < N; n++) {
-            compute_P<<< grid, block, smBytes >>>(d_imgIn, d_Px, d_Py, w, h, nc, epsilon);
-            divergence_and_update<<< grid, block >>>(d_imgIn, d_Px, d_Py, w, h, nc, tau, d_mask);
+            compute_g<<< grid, block, smBytes >>>(d_imgIn, d_g, w, h, nc, epsilon);
+            rb_gs_update<<< grid, block >>>(d_imgIn, d_g, d_mask, w, h, nc, theta, 0);
+            rb_gs_update<<< grid, block >>>(d_imgIn, d_g, d_mask, w, h, nc, theta, 1);
         }
         
         // Copying result back
@@ -312,10 +302,8 @@ int main(int argc, char **argv)
  
         // Freeing Memory
         cudaFree(d_imgIn);
-//        cudaFree(d_imgOut);
         cudaFree(d_mask);
-        cudaFree(d_Px);
-        cudaFree(d_Py);
+        cudaFree(d_g);
     }
     
     timer.end();
