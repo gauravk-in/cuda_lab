@@ -157,11 +157,11 @@ int main(int argc, char **argv)
     getParam("sigma", sigma, argc, argv);
     cout << "σ: " << sigma << endl;
 
-    float lambda = 0.2;
+    float lambda = 0.25;
     getParam("lambda", lambda, argc, argv);
     cout << "lambda: " << lambda << endl;
 
-    float theta = 0.8;
+    float theta = 0.7;
     getParam("theta", theta, argc, argv);
     cout << "theta: " << theta << endl;
 
