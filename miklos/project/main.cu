@@ -39,7 +39,7 @@
 using namespace std;
 
 // uncomment to use the camera
-#define CAMERA
+// #define CAMERA
 
 /*********************************************************************
  *** Global Variables                                           ******
@@ -274,20 +274,14 @@ int main(int argc, char **argv)
     // and make the OpenGL context current
     glutInit(&argc, argv);
 
-    cout << __func__ << ": "<< __LINE__ << ": " << endl;
-
     glutInitDisplayMode(GLUT_DEPTH | GLUT_DOUBLE | GLUT_RGBA);
     glutInitWindowPosition(100,100);
     glutInitWindowSize(640,480);
     glutCreateWindow("Project");
     glutDisplayFunc(&display);
 
-    cout << __func__ << ": "<< __LINE__ << ": " << endl;
-
     // Explicitly set device 0
     cudaGLSetGLDevice(0);
-
-    cout << __func__ << ": "<< __LINE__ << ": " << endl;
 
     // Create buffer object and register it with CUDA
     glGenBuffers(1, &outputVBO);
@@ -299,11 +293,8 @@ int main(int argc, char **argv)
                                  outputVBO,
                                  cudaGraphicsMapFlagsWriteDiscard);
 
-    cout << __func__ << ": "<< __LINE__ << ": " << endl;
-
     // Launch rendering loop
     glutMainLoop();
-    cout << __func__ << ": "<< __LINE__ << ": " << endl;
     atexit(bye);
 
 #else // CAMERA
@@ -380,8 +371,6 @@ void display()
     cudaGraphicsResourceGetMappedPointer((void**)&d_output, &num_bytes, outputVBO_CUDA);
 
     size_t imageBytes = (size_t)w*h*nc*sizeof(float);
-
-    cout << __func__ << ": "<< __LINE__ << ": " << endl;
 
     // Read a camera image frame every 30 milliseconds:
     // cv::waitKey(30) waits 30 milliseconds for a keyboard input,
