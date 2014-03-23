@@ -37,7 +37,7 @@
 using namespace std;
 
 // uncomment to use the camera
-//#define CAMERA
+#define CAMERA
 
 template<typename T>
 __device__ __host__ T min(T a, T b)
@@ -100,7 +100,7 @@ __global__ void norm_grad(float *U, float *vx, float *vy, int w, int h)
  * @param tau update coefficient
  */
 #ifdef CAMERA
-__global__ void update(float4 *output, float *U, float *F, float *vx, float *vy,
+__global__ void update(float *output, float *U, float *F, float *vx, float *vy,
                        int w, int h, float lambda, float tau)
 #else
 __global__ void update(float *U, float *F, float *vx, float *vy,
@@ -128,9 +128,10 @@ __global__ void update(float *U, float *F, float *vx, float *vy,
         U[i] += tau * (lambda * d + div_v);
 
 #ifdef CAMERA
-        float u = x / (float)w;
-        float v = y / (float)h;
-        output[i] = make_float4(u, U[i], v, 1.0f);
+        // float u = x / (float)w;
+        // float v = y / (float)h;
+        // output[i] = make_float4(u, v, U[i], 1.0f);
+        output[i] = U[i];
 #else        
 #endif
     }
@@ -143,6 +144,34 @@ inline dim3 make_grid(dim3 whole, dim3 block)
     return dim3(div_ceil(whole.x, block.x),
                 div_ceil(whole.y, block.y),
                 div_ceil(whole.z, block.z));
+}
+
+
+// shader for displaying floating-point texture
+static const char *shader_code =
+    "!!ARBfp1.0\n"
+    "TEX result.color, fragment.texcoord, texture[0], 2D; \n"
+    "END";
+
+GLuint compileASMShader(GLenum program_type, const char *code)
+{
+    GLuint program_id;
+    glGenProgramsARB(1, &program_id);
+    glBindProgramARB(program_type, program_id);
+    glProgramStringARB(program_type, GL_PROGRAM_FORMAT_ASCII_ARB, (GLsizei) strlen(code), (GLubyte *) code);
+
+    GLint error_pos;
+    glGetIntegerv(GL_PROGRAM_ERROR_POSITION_ARB, &error_pos);
+
+    if (error_pos != -1)
+    {
+        const GLubyte *error_string;
+        error_string = glGetString(GL_PROGRAM_ERROR_STRING_ARB);
+        cout << "Program error at position: " << (int)error_pos << endl << error_string << endl;
+        return 0;
+    }
+
+    return program_id;
 }
 
 
@@ -274,24 +303,50 @@ int main(int argc, char **argv)
 
     GLuint outputVBO;
     struct cudaGraphicsResource* outputVBO_CUDA;
+    GLuint texid;   // Texture
+    GLuint shader;
+
 
     // Explicitly set device 0
     cudaGLSetGLDevice(0);
 
-    // Create buffer object and register it with CUDA
-    glGenBuffers(1, &outputVBO);
-    glBindBuffer(GL_ARRAY_BUFFER, outputVBO);   
-    unsigned int size = w * h * 4 * sizeof(float);
-    glBufferData(GL_ARRAY_BUFFER, size, 0, GL_DYNAMIC_DRAW);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    cudaGraphicsGLRegisterBuffer(&outputVBO_CUDA,
-                                 outputVBO,
+    // create pixel buffer object
+    glGenBuffersARB(1, &outputVBO);
+    glBindBufferARB(GL_PIXEL_UNPACK_BUFFER_ARB, outputVBO);
+    glBufferDataARB(GL_PIXEL_UNPACK_BUFFER_ARB, w*h*sizeof(GLfloat), 0, GL_STREAM_DRAW_ARB);
+
+    glBindBufferARB(GL_PIXEL_UNPACK_BUFFER_ARB, 0);
+
+    cudaGraphicsGLRegisterBuffer(&outputVBO_CUDA, outputVBO,
                                  cudaGraphicsMapFlagsWriteDiscard);
+
+
+    // // Create buffer object and register it with CUDA
+    // glGenBuffers(1, &outputVBO);
+    // glBindBuffer(GL_ARRAY_BUFFER, outputVBO);   
+    // unsigned int size = w * h * 4 * sizeof(float);
+    // glBufferData(GL_ARRAY_BUFFER, size, 0, GL_DYNAMIC_DRAW);
+    // glBindBuffer(GL_ARRAY_BUFFER, 0);
+    // cudaGraphicsGLRegisterBuffer(&outputVBO_CUDA,
+    //                              outputVBO,
+    //                              cudaGraphicsMapFlagsWriteDiscard);
+
+    // load shader program
+    shader = compileASMShader(GL_FRAGMENT_PROGRAM_ARB, shader_code);
+
+    // create texture for display
+    glGenTextures(1, &texid);
+    glBindTexture(GL_TEXTURE_2D, texid);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_LUMINANCE, w, h, 0, GL_LUMINANCE, GL_FLOAT, NULL);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glBindTexture(GL_TEXTURE_2D, 0);
+
 
     // Read a camera image frame every 30 milliseconds:
     // cv::waitKey(30) waits 30 milliseconds for a keyboard input,
     // returns a value <0 if no key is pressed during this time, returns immediately with a value >=0 if a key is pressed
-    while (cv::waitKey(30) < 0 || !glfwWindowShouldClose(window))
+    while (!glfwWindowShouldClose(window))
     {
     // Get camera image
     camera >> mIn;
@@ -301,7 +356,7 @@ int main(int argc, char **argv)
     // convert range of each channel to [0,1] (opencv default is [0,255])
     mIn /= 255.f;
 
-    float4* d_output;
+    float* d_output;
     cudaGraphicsMapResources(1, &outputVBO_CUDA, 0);
     size_t num_bytes; 
     cudaGraphicsResourceGetMappedPointer((void**)&d_output,
@@ -353,12 +408,36 @@ int main(int argc, char **argv)
 
 #ifdef CAMERA
     // Render from buffer object
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    glBindBuffer(GL_ARRAY_BUFFER, outputVBO);
-    glVertexPointer(4, GL_FLOAT, 0, 0);
-    glEnableClientState(GL_VERTEX_ARRAY);
-    glDrawArrays(GL_POINTS, 0, w * h);
-    glDisableClientState(GL_VERTEX_ARRAY);
+    // OpenGL display code path
+    {
+        glClear(GL_COLOR_BUFFER_BIT);
+
+        // load texture from pbo
+        glBindBufferARB(GL_PIXEL_UNPACK_BUFFER_ARB, outputVBO);
+        glBindTexture(GL_TEXTURE_2D, texid);
+        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, w, h, GL_LUMINANCE, GL_FLOAT, 0);
+        glBindBufferARB(GL_PIXEL_UNPACK_BUFFER_ARB, 0);
+
+        // fragment program is required to display floating point texture
+        glBindProgramARB(GL_FRAGMENT_PROGRAM_ARB, shader);
+        glEnable(GL_FRAGMENT_PROGRAM_ARB);
+        glDisable(GL_DEPTH_TEST);
+
+        glBegin(GL_QUADS);
+        {
+            glTexCoord2f(0.0f, 0.0f);
+            glVertex2f(0.0f, 0.0f);
+            glTexCoord2f(1.0f, 0.0f);
+            glVertex2f(1.0f, 0.0f);
+            glTexCoord2f(1.0f, 1.0f);
+            glVertex2f(1.0f, 1.0f);
+            glTexCoord2f(0.0f, 1.0f);
+            glVertex2f(0.0f, 1.0f);
+        }
+        glEnd();
+        glBindTexture(GL_TEXTURE_2D, 0);
+        glDisable(GL_FRAGMENT_PROGRAM_ARB);
+    }
 #else
     // show input image
     showImage("Input", mIn, 100, 100);  // show at position (x_from_left=100,y_from_above=100)
