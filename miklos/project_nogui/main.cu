@@ -66,15 +66,39 @@ __global__ void norm_grad(float *U, float *vx, float *vy, int w, int h)
         size_t i = x + (size_t)w*y;
         float ux = ((x+1 < w) ? (U[i + 1] - U[i]) : 0);
         float uy = ((y+1 < h) ? (U[i + w] - U[i]) : 0);
-        float gn = sqrtf(ux*ux + uy*uy);
-        if (fabsf(gn) < FLT_EPSILON) {
-            // Prevent division by zero. Result will be null vector.
-            vx[i] = 0.0;
-            vy[i] = 0.0;
-        } else {
-            vx[i] = ux / gn;
-            vy[i] = uy / gn;
-        }
+        float gn = sqrtf(ux*ux + uy*uy + FLT_EPSILON);
+        vx[i] = ux / gn;
+        vy[i] = uy / gn;
+    }
+}
+
+/**
+ * nu (Greek letter) function penalizes being outside the interval [0; 1].
+ */
+__device__ float nu(float u)
+{
+    if (u < 0.f)
+        return -2.f;
+    if (u > 1.f)
+        return +2.f;
+    return 0.f;
+}
+
+/**
+ * Calculate s(x) = (c1 - f(x))^2 - (c2 - f(x))^2.
+ *
+ * @param F original input image (single-channel)
+ * @param S result (single-channel)
+ * @param w width of image (pixels)
+ * @param h height of image (pixels)
+ */
+__global__ void calculate_S(float *F, float *S, int w, int h, float c1, float c2)
+{
+    int x = threadIdx.x + blockDim.x * blockIdx.x;
+    int y = threadIdx.y + blockDim.y * blockIdx.y;
+    if (x < w && y < h) {
+        size_t i = x + (size_t)w*y;
+        S[i] = (c1 - F[i])*(c1 - F[i]) - (c2 - F[i])*(c2 - F[i]);
     }
 }
 
@@ -82,28 +106,22 @@ __global__ void norm_grad(float *U, float *vx, float *vy, int w, int h)
  * Update approximation.
  *
  * @param U approximation of solution (single-channel)
- * @param F original input image (single-channel)
+ * @param S update component from input image (single-channel)
  * @param vx normalized gradient of U (x-coordinate)
  * @param vy normalized gradient of U (y-coordinate)
  * @param w width of image (pixels)
  * @param h height of image (pixels)
- * @param lambda weight of 'similarity' energy component
+ * @param lambda weight of S
+ * @param alpha weight of nu
  * @param tau update coefficient
  */
-__global__ void update(float *U, float *F, float *vx, float *vy,
-                       int w, int h, float lambda, float tau)
+__global__ void update(float *U, float *S, float *vx, float *vy,
+                       int w, int h, float lambda, float alpha, float tau)
 {
     int x = threadIdx.x + blockDim.x * blockIdx.x;
     int y = threadIdx.y + blockDim.y * blockIdx.y;
     if (x < w && y < h) {
         size_t i = x + (size_t)w*y;
-
-        // similarity to input image (functional derivative of energy)
-        float d = F[i] - U[i];
-        if (fabsf(d) < FLT_EPSILON * U[i])
-            d = 0.f;
-        else
-            d = ((d > 0) ? 1.f : -1.f);
 
         // smoothness (functional derivative of energy)
         float dx_vx = ((x+1 < w) ? vx[i] : 0) - ((x > 0) ? vx[i - 1] : 0);
@@ -111,7 +129,7 @@ __global__ void update(float *U, float *F, float *vx, float *vy,
         float div_v = dx_vx + dy_vy;
 
         // explicit Euler update rule
-        U[i] += tau * (lambda * d + div_v);
+        U[i] += tau * (div_v - lambda * S[i] - alpha * nu(U[i]));
     }
 }
 
@@ -172,6 +190,14 @@ int main(int argc, char **argv)
     int N = 2000;
     getParam("N", N, argc, argv);
     cout << "N: " << N << endl;
+
+    float c1 = 0.65;
+    getParam("c1", c1, argc, argv);
+    cout << "c1: " << c1 << endl;
+
+    float c2 = 0.00;
+    getParam("c2", c2, argc, argv);
+    cout << "c2: " << c2 << endl;
 
     // Init camera / Load input image
 #ifdef CAMERA
@@ -257,22 +283,31 @@ int main(int argc, char **argv)
     dim3 grid = make_grid(dim3(w, h, 1), block);
 
     Timer timer; timer.start();
-    float *d_F, *d_U, *d_vx, *d_vy;
-    cudaMalloc(&d_F, imageBytes);
+    float *d_U, *d_S, *d_vx, *d_vy;
     cudaMalloc(&d_U, imageBytes);
+    cudaMalloc(&d_S, imageBytes);
     cudaMalloc(&d_vx, imageBytes);
     cudaMalloc(&d_vy, imageBytes);
-    cudaMemcpy(d_F, imgIn, imageBytes, cudaMemcpyHostToDevice);
     cudaMemcpy(d_U, imgIn, imageBytes, cudaMemcpyHostToDevice);
+    cudaMemcpy(d_S, imgIn, imageBytes, cudaMemcpyHostToDevice);
+
+    calculate_S<<< grid, block >>>(d_U, d_S, w, h, c1, c2);
+    float *S = new float[(size_t)w*h];
+    cudaMemcpy(S, d_S, imageBytes, cudaMemcpyDeviceToHost);
+    float S_max = 0.0;
+    for (size_t i = 0; i < (size_t)w*h; i++)
+        S_max = max(S_max, fabs(S[i]));  // TODO: CPU thing
+    delete[] S;
+    float alpha = 0.5 * lambda * S_max;
 
     for (int n = 0; n < N; n++) {
         norm_grad<<< grid, block >>>(d_U, d_vx, d_vy, w, h);
-        update<<< grid, block >>>(d_U, d_F, d_vx, d_vy, w, h, lambda, tau);
+        update<<< grid, block >>>(d_U, d_S, d_vx, d_vy, w, h, lambda, alpha, tau);
     }
 
     cudaMemcpy(imgOut, d_U, imageBytes, cudaMemcpyDeviceToHost);
-    cudaFree(d_F);
     cudaFree(d_U);
+    cudaFree(d_S);
     cudaFree(d_vx);
     cudaFree(d_vy);
     timer.end();  float t = timer.get();  // elapsed time in seconds
