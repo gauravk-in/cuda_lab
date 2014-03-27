@@ -6,3 +6,8 @@ image_result.png
 *.project
 *.settings
 *.settings/*
+miklos/sample_qt_opengl_cuda_shit_without_camera/moc_glwidget.cpp
+miklos/sample_qt_opengl_cuda_shit_without_camera/Makefile
+miklos/sample_qt_opengl_cuda_shit_without_camera/hello-opengl
+*.o
+
