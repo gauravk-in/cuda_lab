@@ -90,6 +90,13 @@ __global__ void update_Output(uchar4* output, float *U, int w, int h) {
 
 inline int div_ceil(int n, int b) { return (n + b - 1) / b; }
 
+inline dim3 make_grid(dim3 whole, dim3 block)
+{
+    return dim3(div_ceil(whole.x, block.x),
+                div_ceil(whole.y, block.y),
+                div_ceil(whole.z, block.z));
+}
+
 
 __global__ void createVertices(float *in, uchar4* pixel, int w, int h)
 {
@@ -111,8 +118,8 @@ void executeKernel(void *d_in, void *d_out, size_t w, size_t h)
     float *d_U = reinterpret_cast<float *>(d_in);
     uchar4 *pixel = reinterpret_cast<uchar4 *>(d_out);
 
-    dim3 dimBlock(16, 16, 1);
-    dim3 dimGrid(w / dimBlock.x, h / dimBlock.y, 1);
+    dim3 dimBlock(32, 16);
+    dim3 dimGrid = make_grid(dim3(w, h, 1), dimBlock);
 
     // set parameters manually here
     float lambda = 1.0;
