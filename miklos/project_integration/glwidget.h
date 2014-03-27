@@ -18,8 +18,7 @@ protected:
     void paintGL();
 
 private:
-    QGLFunctions func;
-    time_t start;
+    QGLFunctions gl;
 };
 
 #endif // GLWIDGET_H

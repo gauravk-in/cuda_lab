@@ -1,6 +1,6 @@
-#ifndef _KERNEL_H
-#define _KERNEL_H
+#ifndef KERNEL_H
+#define KERNEL_H
 
-extern "C" void executeKernel(float *d_in, void *positions_, int width, int height, float time);
+extern "C" void executeKernel(void *d_in, void *d_out, size_t width, size_t height);
 
-#endif // _KERNEL_H
+#endif // KERNEL_H

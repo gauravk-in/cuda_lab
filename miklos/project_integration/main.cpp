@@ -1,29 +1,23 @@
-#include <iostream>
-
-#include <QApplication>
-
-#include <opencv2/highgui/highgui.hpp>
-
+#include "camera.h"
 #include "glwidget.h"
 
-cv::VideoCapture camera;
+#include <iostream>
+#include <QApplication>
 
 int main(int argc, char *argv[])
 {
     QApplication app(argc, argv);
+    GlWidget w;
 
     // Init camera
-  	camera.open(0);
-  	if(!camera.isOpened()) {
+    if(!camera.init(0)) {
         std::cerr << "ERROR: Could not open camera" << std::endl;
         return 1;
     }
-    int camW = 640;
-    int camH = 480;
-  	camera.set(CV_CAP_PROP_FRAME_WIDTH,camW);
-  	camera.set(CV_CAP_PROP_FRAME_HEIGHT,camH);
-    
-    GlWidget w;
+
+    QObject::connect(&camera, SIGNAL(newFrame()), &w, SLOT(updateGL()));
+
+    camera.start();
     w.show();
 
     return app.exec();

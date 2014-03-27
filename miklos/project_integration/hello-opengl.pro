@@ -5,8 +5,8 @@ TARGET = hello-opengl
 
 TEMPLATE = app
 
-SOURCES += main.cpp glwidget.cpp
-HEADERS += glwidget.h kernel.h
+SOURCES += main.cpp glwidget.cpp camera.cpp
+HEADERS += glwidget.h kernel.h camera.h
 
 CUDA_SOURCES += kernel.cu
 
