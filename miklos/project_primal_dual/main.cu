@@ -28,7 +28,7 @@
 using namespace std;
 
 // uncomment to use the camera
-//#define CAMERA
+#define CAMERA
 
 template<typename T>
 __device__ __host__ T min(T a, T b)
@@ -186,6 +186,7 @@ int main(int argc, char **argv)
     // read in first frame to get the dimensions
     cv::Mat mIn;
     camera >> mIn;
+    cvtColor(mIn, mIn, CV_BGR2GRAY);
     
 #else
     
@@ -207,14 +208,9 @@ int main(int argc, char **argv)
     cout << "image: " << w << " x " << h << endl;
 
 
-
-
     // Set the output image format
     cv::Mat mOut(h,w,mIn.type());  // mOut will have the same number of channels as the input image, nc layers
     // ### Define your own output images here as needed
-
-
-
 
     // Allocate arrays
     // input/output image width: w
@@ -229,9 +225,6 @@ int main(int argc, char **argv)
     // allocate raw output array (the computation result will be stored in this array, then later converted to mOut for displaying)
     float *imgOut = new float[(size_t)w*h*mOut.channels()];
 
-
-
-
     // For camera mode: Make a loop to read in camera frames
 #ifdef CAMERA
     // Read a camera image frame every 30 milliseconds:
@@ -242,6 +235,7 @@ int main(int argc, char **argv)
     // Get camera image
     camera >> mIn;
     // convert to float representation (opencv loads image values as single bytes by default)
+    cvtColor(mIn, mIn, CV_BGR2GRAY);
     mIn.convertTo(mIn,CV_32F);
     // convert range of each channel to [0,1] (opencv default is [0,255])
     mIn /= 255.f;
@@ -251,12 +245,15 @@ int main(int argc, char **argv)
     // opencv images are interleaved: rgb rgb rgb...  (actually bgr bgr bgr...)
     // But for CUDA it's better to work with layered images: rrr... ggg... bbb...
     // So we will convert as necessary, using interleaved "cv::Mat" for loading/saving/displaying, and layered "float*" for CUDA computations
+
+
     convert_mat_to_layered (imgIn, mIn);
 
     dim3 block(32, 16);
     dim3 grid = make_grid(dim3(w, h, 1), block);
 
     Timer timer; timer.start();
+    for ( int jk = 0; jk < repeats; jk++ ) {
     float *d_T, *d_U, *d_F, *d_Xi, *d_Xj;
     cudaMalloc(&d_T, imageBytes);
     cudaMalloc(&d_U, imageBytes);
@@ -282,13 +279,10 @@ int main(int argc, char **argv)
     cudaFree(d_F);
     cudaFree(d_Xi);
     cudaFree(d_Xj);
+    }
+
     timer.end();  float t = timer.get();  // elapsed time in seconds
-    cout << "time: " << t*1000 << " ms" << endl;
-
-
-
-
-
+    cout << "time: " << t*1000/repeats << " ms" << endl;
 
     // show input image
     showImage("Input", mIn, 100, 100);  // show at position (x_from_left=100,y_from_above=100)
@@ -306,9 +300,6 @@ int main(int argc, char **argv)
     // wait for key inputs
     cv::waitKey(0);
 #endif
-
-
-
 
     // save input and result
     cv::imwrite("image_input.png",mIn*255.f);  // "imwrite" assumes channel range [0,255]
