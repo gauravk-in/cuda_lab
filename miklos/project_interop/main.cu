@@ -16,7 +16,7 @@
 
 // ###
 // ###
-// ### Miklos Homolya, miklos.homolya@tum.de, p056 
+// ### Miklos Homolya, miklos.homolya@tum.de, p056
 // ### Ravikishore Kommajosyula, r.kommajosyula@tum.de, p057
 // ### Gaurav Kukreja, gaurav.kukreja@tum.de, p058
 // ###
@@ -40,6 +40,7 @@ float tau;
 int N;
 float c1;
 float c2;
+float sigma;
 
 cv::VideoCapture camera(0);
 cv::Mat mIn;
@@ -70,99 +71,63 @@ __device__ __host__ T clamp(T m, T x, T M)
 }
 
 
-/**
- * Computes the normalized gradient.
- *
- * @param U input image (single-channel)
- * @param vx x-coordinate of result
- * @param vy y-coordinate of result
- * @param w width of image (pixels)
- * @param h height of image (pixels)
- */
-__global__ void norm_grad(float *U, float *vx, float *vy, int w, int h)
+__global__ void calculate_F(float *U, float *F, int w, int h, float c1, float c2, float lambda)
 {
     int x = threadIdx.x + blockDim.x * blockIdx.x;
     int y = threadIdx.y + blockDim.y * blockIdx.y;
     if (x < w && y < h) {
         size_t i = x + (size_t)w*y;
-        float ux = ((x+1 < w) ? (U[i + 1] - U[i]) : 0);
-        float uy = ((y+1 < h) ? (U[i + w] - U[i]) : 0);
-        float gn = sqrtf(ux*ux + uy*uy + FLT_EPSILON);
-        vx[i] = ux / gn;
-        vy[i] = uy / gn;
+        F[i] = lambda * ((c1 - U[i])*(c1 - U[i]) - (c2 - U[i])*(c2 - U[i]));
     }
 }
 
-/**
- * nu (Greek letter) function penalizes being outside the interval [0; 1].
- */
-__device__ float nu(float u)
+__device__ float diff_i(float *M, int w, int h, int x, int y)
 {
-    if (u < 0.f)
-        return -2.f;
-    if (u > 1.f)
-        return +2.f;
-    return 0.f;
+    size_t i = x + (size_t)w*y;
+    return (x+1 < w) ? (M[i + 1] - M[i]) : 0.f;
 }
 
-/**
- * Calculate s(x) = (c1 - f(x))^2 - (c2 - f(x))^2.
- *
- * @param F original input image (single-channel)
- * @param S result (single-channel)
- * @param w width of image (pixels)
- * @param h height of image (pixels)
- */
-__global__ void calculate_S(float *F, float *S, int w, int h, float c1, float c2)
+__device__ float diff_j(float *M, int w, int h, int x, int y)
+{
+    size_t i = x + (size_t)w*y;
+    return (y+1 < h) ? (M[i + w] - M[i]) : 0.f;
+}
+
+__global__ void update_Xij(float *Xi, float *Xj, float *T, float *U, int w, int h, float sigma)
 {
     int x = threadIdx.x + blockDim.x * blockIdx.x;
     int y = threadIdx.y + blockDim.y * blockIdx.y;
     if (x < w && y < h) {
         size_t i = x + (size_t)w*y;
-        S[i] = (c1 - F[i])*(c1 - F[i]) - (c2 - F[i])*(c2 - F[i]);
+        float xi = Xi[i] - sigma * (2 * diff_i(U, w, h, x, y) - diff_i(T, w, h, x, y));
+        float xj = Xj[i] - sigma * (2 * diff_j(U, w, h, x, y) - diff_j(T, w, h, x, y));
+        float dn = max(1.f, sqrtf(xi*xi + xj*xj));
+        Xi[i] = xi / dn;
+        Xj[i] = xj / dn;
     }
 }
 
-/**
- * Update approximation.
- *
- * @param U approximation of solution (single-channel)
- * @param S update component from input image (single-channel)
- * @param vx normalized gradient of U (x-coordinate)
- * @param vy normalized gradient of U (y-coordinate)
- * @param w width of image (pixels)
- * @param h height of image (pixels)
- * @param lambda weight of S
- * @param alpha weight of nu
- * @param tau update coefficient
- */
-#ifdef CAMERA
-__global__ void update(uchar4* output, float *U, float *S, float *vx, float *vy,
-                       int w, int h, float lambda, float alpha, float tau)
+__device__ float divergence(float *X, float *Y, int w, int h, int x, int y)
+{
+    size_t i = x + (size_t)w*y;
+    float dx_x = ((x+1 < w) ? X[i] : 0.f) - ((x > 0) ? X[i - 1] : 0.f);
+    float dy_y = ((y+1 < h) ? Y[i] : 0.f) - ((y > 0) ? Y[i - w] : 0.f);
+    return dx_x + dy_y;
+}
 
-#else
-__global__ void update(float *U, float *S, float *vx, float *vy,
-                       int w, int h, float lambda, float alpha, float tau)
-#endif
+__global__ void update_U(uchar4* output, float *T, float *Xi, float *Xj, float *F, float *U, int w, int h, float tau)
 {
     int x = threadIdx.x + blockDim.x * blockIdx.x;
     int y = threadIdx.y + blockDim.y * blockIdx.y;
     if (x < w && y < h) {
         size_t i = x + (size_t)w*y;
-
-        // smoothness (functional derivative of energy)
-        float dx_vx = ((x+1 < w) ? vx[i] : 0) - ((x > 0) ? vx[i - 1] : 0);
-        float dy_vy = ((y+1 < h) ? vy[i] : 0) - ((y > 0) ? vy[i - w] : 0);
-        float div_v = dx_vx + dy_vy;
-
-        // explicit Euler update rule
-        U[i] += tau * (div_v - lambda * S[i] - alpha * nu(U[i]));
-#ifdef CAMERA
-        output[w*h-i-1].x = (uchar)(U[i] * 255.f);
-        output[w*h-i-1].y = output[w*h-i-1].x;
-        output[w*h-i-1].z = output[w*h-i-1].x;
+        U[i] = clamp(0.f, T[i] - tau * (divergence(Xi, Xj, w, h, x, y) + F[i]), 1.f);
+        uchar temp_res = (uchar)(U[i] * 255.f);
+        output[w*h-i-1].x = temp_res;
+        output[w*h-i-1].y = temp_res;
+        output[w*h-i-1].z = temp_res;
         output[w*h-i-1].w = 255;
-#endif
+
     }
 }
 
@@ -190,7 +155,7 @@ static void key_func( unsigned char key, int x, int y ) {
         glBindBuffer( GL_PIXEL_UNPACK_BUFFER_ARB, 0 );
         glDeleteBuffers( 1, &bufferObj );
         exit(0);
-    } 
+    }
 }
 
 static void draw_func( void ) {
@@ -208,10 +173,10 @@ static void draw_func( void ) {
     uchar4* d_output;
     size_t size;
 
-    // allocate raw input image array   
+    // allocate raw input image array
     float *imgIn  = new float[(size_t)w*h*nc];
     size_t imageBytes = (size_t)w*h*nc*sizeof(float);
-    
+
     cudaGraphicsMapResources (1, &resource, NULL);
     cudaGraphicsResourceGetMappedPointer( (void**) &d_output, &size, resource);
 
@@ -225,33 +190,33 @@ static void draw_func( void ) {
     dim3 grid = make_grid(dim3(w, h, 1), block);
 
     Timer timer; timer.start();
-    float *d_U, *d_S, *d_vx, *d_vy;
+    float *d_T, *d_U, *d_F, *d_Xi, *d_Xj;
+    cudaMalloc(&d_T, imageBytes);
     cudaMalloc(&d_U, imageBytes);
-    cudaMalloc(&d_S, imageBytes);
-    cudaMalloc(&d_vx, imageBytes);
-    cudaMalloc(&d_vy, imageBytes);
-    cudaMemcpy(d_U, imgIn, imageBytes, cudaMemcpyHostToDevice);
-    cudaMemcpy(d_S, imgIn, imageBytes, cudaMemcpyHostToDevice);
+    cudaMalloc(&d_F, imageBytes);
+    cudaMalloc(&d_Xi, imageBytes);
+    cudaMalloc(&d_Xj, imageBytes);
+    cudaMemcpy(d_T, imgIn, imageBytes, cudaMemcpyHostToDevice);
+    cudaMemcpy(d_U, d_T, imageBytes, cudaMemcpyDeviceToDevice);
+    cudaMemset(d_Xi, 0, imageBytes);
+    cudaMemset(d_Xj, 0, imageBytes);
 
-    calculate_S<<< grid, block >>>(d_U, d_S, w, h, c1, c2);
-    float *S = new float[(size_t)w*h];
-    cudaMemcpy(S, d_S, imageBytes, cudaMemcpyDeviceToHost);
-    float S_max = 0.0;
-    for (size_t i = 0; i < (size_t)w*h; i++)
-        S_max = max(S_max, fabs(S[i]));  // TODO: CPU thing
-    delete[] S;
-    float alpha = 0.5 * lambda * S_max;
+    calculate_F<<< grid, block >>>(d_U, d_F, w, h, c1, c2, lambda);
 
     for (int n = 0; n < N; n++) {
-        norm_grad<<< grid, block >>>(d_U, d_vx, d_vy, w, h);
-        update<<< grid, block >>>(d_output, d_U, d_S, d_vx, d_vy, w, h, lambda, alpha, tau);
+        update_Xij<<< grid, block >>>(d_Xi, d_Xj, d_T, d_U, w, h, sigma);
+        std::swap(d_U, d_T);
+        update_U<<< grid, block >>>(d_output, d_T, d_Xi, d_Xj, d_F, d_U, w, h, tau);
     }
 
+   // cudaMemcpy(imgOut, d_U, imageBytes, cudaMemcpyDeviceToHost);
     cudaGraphicsUnmapResources(1, &resource, NULL);
+    cudaFree(d_T);
     cudaFree(d_U);
-    cudaFree(d_S);
-    cudaFree(d_vx);
-    cudaFree(d_vy);
+    cudaFree(d_F);
+    cudaFree(d_Xi);
+    cudaFree(d_Xj);
+
     timer.end();  float t = timer.get();  // elapsed time in seconds
     cout << "time: " << t*1000 << " ms" << endl;
 
@@ -278,7 +243,7 @@ int main(int argc, char **argv)
      glBindBuffer(GL_PIXEL_UNPACK_BUFFER_ARB, bufferObj);
      glBufferData(GL_PIXEL_UNPACK_BUFFER_ARB, WIDTH * HEIGHT * 4, NULL, GL_DYNAMIC_DRAW_ARB);
      cudaGraphicsGLRegisterBuffer( &resource, bufferObj, cudaGraphicsMapFlagsNone);
-#endif    
+#endif
 
     // Before the GPU can process your kernels, a so called "CUDA context" must be initialized
     // This happens on the very first call to a CUDA function, and takes some time (around half a second)
@@ -299,31 +264,35 @@ int main(int argc, char **argv)
     if (!ret) cerr << "ERROR: no image specified" << endl;
     if (argc <= 1) { cout << "Usage: " << argv[0] << " -i <image> [-repeats <repeats>] [-gray]" << endl; return 1; }
 #endif
-    
+
     // number of computation repetitions to get a better run time measurement
     repeats = 1;
     getParam("repeats", repeats, argc, argv);
     cout << "repeats: " << repeats << endl;
-    
+
     // load the input image as grayscale if "-gray" is specifed
     gray = true;
     // always true: getParam("gray", gray, argc, argv);
     cout << "gray: " << gray << endl;
 
-    // ### Define your own parameters here as needed    
-    lambda = 0.8;
+    // ### Define your own parameters here as needed
+    lambda = 1.0;
     getParam("lambda", lambda, argc, argv);
     cout << "λ: " << lambda << endl;
 
-    tau = 0.01;
+    sigma = 0.4;
+    getParam("sigma", sigma, argc, argv);
+    cout << "σ: " << sigma << endl;
+
+    tau = 0.4;
     getParam("tau", tau, argc, argv);
     cout << "τ: " << tau << endl;
 
-    N = 2000;
+    N = 160;
     getParam("N", N, argc, argv);
     cout << "N: " << N << endl;
 
-    c1 = 0.65;
+    c1 = 1.0;
     getParam("c1", c1, argc, argv);
     cout << "c1: " << c1 << endl;
 
@@ -341,18 +310,18 @@ int main(int argc, char **argv)
   	camera.set(CV_CAP_PROP_FRAME_WIDTH,camW);
   	camera.set(CV_CAP_PROP_FRAME_HEIGHT,camH);
     // read in first frame to get the dimensions
-    
+
     camera >> mIn;
     if(gray)
         cvtColor(mIn, mIn, CV_BGR2GRAY);
-    
+
 #else
-    
+
     // Load the input image using opencv (load as grayscale if "gray==true", otherwise as is (may be color or grayscale))
     mIn = cv::imread(image.c_str(), (gray? CV_LOAD_IMAGE_GRAYSCALE : -1));
     // check
     if (mIn.data == NULL) { cerr << "ERROR: Could not load image " << image << endl; return 1; }
-    
+
 #endif
 
     // convert to float representation (opencv loads image values as single bytes by default)
