@@ -10,14 +10,16 @@ HEADERS += glwidget.h kernel.h
 
 CUDA_SOURCES += kernel.cu
 
-LIBS += -lGLEW -lcuda -lcudart
+LIBS += -lGLEW -lcudart -lcuda
 
+QMAKE_LFLAGS += -Wl,-rpath,/usr/lib/nvidia-331-updates -Wl,-rpath,/usr/lib/nvidia-331-updates/tls
 # Path to cuda toolkit install
-CUDA_DIR      = /usr/
+CUDA_DIR      = /usr/local/cuda-5.5
 
 # Path to header and libs files
 INCLUDEPATH  += $$CUDA_DIR/include
-QMAKE_LIBDIR += $$CUDA_DIR/lib
+QMAKE_LIBDIR += $$CUDA_DIR/lib64
+QMAKE_LIBDIR += /usr/lib/nvidia-331-updates /usr/lib/nvidia-331-updates/tls
 # GPU architecture
 CUDA_ARCH     = sm_10
 NVCCFLAGS     = --compiler-options -use_fast_math --ptxas-options=-v
