@@ -12,6 +12,7 @@ public:
     explicit GlWidget(QWidget *parent = 0);
     ~GlWidget();
     QSize sizeHint() const;
+    float *d_in;
 
 protected:
     void initializeGL();
@@ -19,7 +20,6 @@ protected:
 
 private:
     QGLFunctions gl;
-    void *d_in;
 };
 
 #endif // GLWIDGET_H

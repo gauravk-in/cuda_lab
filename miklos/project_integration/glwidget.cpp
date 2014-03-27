@@ -38,7 +38,7 @@ void GlWidget::initializeGL()
     cudaGraphicsGLRegisterBuffer(&pixelsVBO_CUDA, pixelsVBO, cudaGraphicsMapFlagsWriteDiscard);
 
     size_t inBytes = camera.width() * camera.height() * sizeof(float);
-    cudaMalloc(&d_in, inBytes);
+    cudaMalloc((void **)&d_in, inBytes);
 }
 
 void GlWidget::paintGL()

@@ -4,6 +4,9 @@
 #include <algorithm>
 #include <stdio.h>
 
+texture<float,2,cudaReadModeElementType> texRef_Xi;
+texture<float,2,cudaReadModeElementType> texRef_Xj;
+
 template<typename T>
 __device__ __host__ T min(T a, T b)
 {
@@ -29,7 +32,8 @@ __global__ void calculate_F(float *U, float *F, int w, int h, float c1, float c2
     int y = threadIdx.y + blockDim.y * blockIdx.y;
     if (x < w && y < h) {
         size_t i = x + (size_t)w*y;
-        F[i] = lambda * ((c1 - U[i])*(c1 - U[i]) - (c2 - U[i])*(c2 - U[i]));
+        float temp_ui = U[i];
+        F[i] = lambda * ((c1 - temp_ui)*(c1 - temp_ui) - (c2 - temp_ui)*(c2 - temp_ui));
     }
 }
 
@@ -50,20 +54,20 @@ __global__ void update_Xij(float *Xi, float *Xj, float *T, float *U, int w, int 
     int x = threadIdx.x + blockDim.x * blockIdx.x;
     int y = threadIdx.y + blockDim.y * blockIdx.y;
     if (x < w && y < h) {
-        size_t i = x + (size_t)w*y;
-        float xi = Xi[i] - sigma * (2 * diff_i(U, w, h, x, y) - diff_i(T, w, h, x, y));
-        float xj = Xj[i] - sigma * (2 * diff_j(U, w, h, x, y) - diff_j(T, w, h, x, y));
-        float dn = max(1.f, sqrtf(xi*xi + xj*xj));
-        Xi[i] = xi / dn;
-        Xj[i] = xj / dn;
+		size_t i = x + (size_t) w * y;
+		float xi = Xi[i] - sigma * (2 * diff_i(U, w, h, x, y) - diff_i(T, w, h, x, y));
+		float xj = Xj[i] - sigma * (2 * diff_j(U, w, h, x, y) - diff_j(T, w, h, x, y));
+		float dn = max(1.f, sqrtf(xi * xi + xj * xj));
+		Xi[i] = xi / dn;
+		Xj[i] = xj / dn;
     }
 }
 
 __device__ float divergence(float *X, float *Y, int w, int h, int x, int y)
 {
-    size_t i = x + (size_t)w*y;
-    float dx_x = ((x+1 < w) ? X[i] : 0.f) - ((x > 0) ? X[i - 1] : 0.f);
-    float dy_y = ((y+1 < h) ? Y[i] : 0.f) - ((y > 0) ? Y[i - w] : 0.f);
+    float dx_x = tex2D(texRef_Xi, x + 0.5f , y + 0.5f) - tex2D(texRef_Xi, x - 0.5f , y + 0.5f);
+    float dy_y = tex2D(texRef_Xj, x + 0.5f , y + 0.5f) - tex2D(texRef_Xj, x + 0.5f , y - 0.5f);
+
     return dx_x + dy_y;
 }
 
@@ -100,36 +104,38 @@ inline dim3 make_grid(dim3 whole, dim3 block)
                 div_ceil(whole.z, block.z));
 }
 
-
-__global__ void createVertices(float *in, uchar4* pixel, int w, int h)
-{
-    unsigned int x = blockIdx.x * blockDim.x + threadIdx.x;
-    unsigned int y = blockIdx.y * blockDim.y + threadIdx.y;
-
-    unsigned char intensity = roundf(255 * in[y * w + x]);
-
-    // Write positions
-    size_t i = x + w*(h-1 - y);
-    pixel[i].x = intensity;
-    pixel[i].y = intensity;
-    pixel[i].z = intensity;
-    pixel[i].w = 255;
-}
-
 static float *d_T, *d_F, *d_Xi, *d_Xj;
 
-void allocate_device_memory(size_t w, size_t h)
+
+void allocate_device_memory(float *d_in, size_t w, size_t h)
 {
 	size_t imageBytes = w*h*sizeof(float);
 	cudaMalloc(&d_T, imageBytes);
 	cudaMalloc(&d_F, imageBytes);
 	cudaMalloc(&d_Xi, imageBytes);
 	cudaMalloc(&d_Xj, imageBytes);
+
+	// Define texture attributes
+    texRef_Xi.addressMode[0] = cudaAddressModeClamp;             // clamp x to border
+    texRef_Xi.addressMode[1] = cudaAddressModeClamp;            // clamp y to border
+    texRef_Xi.filterMode = cudaFilterModeLinear;            // linear interpolation
+    texRef_Xi.normalized = false;
+    cudaChannelFormatDesc desc_Xi = cudaCreateChannelDesc<float>();
+    cudaBindTexture2D(NULL, &texRef_Xi, d_Xi, &desc_Xi, w, h, w*sizeof(d_Xi[0]));
+
+	// Define texture attributes
+    texRef_Xj.addressMode[0] = cudaAddressModeClamp;             // clamp x to border
+    texRef_Xj.addressMode[1] = cudaAddressModeClamp;            // clamp y to border
+    texRef_Xj.filterMode = cudaFilterModeLinear;            // linear interpolation
+    texRef_Xj.normalized = false;
+    cudaChannelFormatDesc desc_Xj = cudaCreateChannelDesc<float>();
+    cudaBindTexture2D(NULL, &texRef_Xj, d_Xj, &desc_Xj, w, h, w*sizeof(d_Xj[0]));
+
 }
 
-void executeKernel(void *d_in, void *d_out, size_t w, size_t h)
+void executeKernel(float *d_U, void *d_out, size_t w, size_t h)
 {
-    float *d_U = reinterpret_cast<float *>(d_in);
+    // float *d_U = reinterpret_cast<float *>(d_in);
     uchar4 *pixel = reinterpret_cast<uchar4 *>(d_out);
 
     static Timer timer;
