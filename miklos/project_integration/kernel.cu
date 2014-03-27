@@ -1,5 +1,8 @@
 #include "kernel.h"
+#include "timer.h"
+
 #include <algorithm>
+#include <stdio.h>
 
 template<typename T>
 __device__ __host__ T min(T a, T b)
@@ -118,6 +121,11 @@ void executeKernel(void *d_in, void *d_out, size_t w, size_t h)
     float *d_U = reinterpret_cast<float *>(d_in);
     uchar4 *pixel = reinterpret_cast<uchar4 *>(d_out);
 
+    static Timer timer;
+    timer.end();
+    printf("time: %.2fms (%.2f FPS)\n", timer.get() * 1E3F, 1.F / timer.get());
+    timer.start();
+
     dim3 dimBlock(32, 16);
     dim3 dimGrid = make_grid(dim3(w, h, 1), dimBlock);
 
@@ -151,6 +159,4 @@ void executeKernel(void *d_in, void *d_out, size_t w, size_t h)
     cudaFree(d_F);
     cudaFree(d_Xi);
     cudaFree(d_Xj);
-
-//    createVertices<<<dimGrid, dimBlock>>>(in, pixel, w, h);
 }
