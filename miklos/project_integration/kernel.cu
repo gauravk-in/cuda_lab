@@ -116,6 +116,17 @@ __global__ void createVertices(float *in, uchar4* pixel, int w, int h)
     pixel[i].w = 255;
 }
 
+static float *d_T, *d_F, *d_Xi, *d_Xj;
+
+void allocate_device_memory(size_t w, size_t h)
+{
+	size_t imageBytes = w*h*sizeof(float);
+	cudaMalloc(&d_T, imageBytes);
+	cudaMalloc(&d_F, imageBytes);
+	cudaMalloc(&d_Xi, imageBytes);
+	cudaMalloc(&d_Xj, imageBytes);
+}
+
 void executeKernel(void *d_in, void *d_out, size_t w, size_t h)
 {
     float *d_U = reinterpret_cast<float *>(d_in);
@@ -137,12 +148,7 @@ void executeKernel(void *d_in, void *d_out, size_t w, size_t h)
     float c1 = 1.0;
     float c2 = 0.00;
 
-    float *d_T, *d_F, *d_Xi, *d_Xj;
     size_t imageBytes = w*h*sizeof(float);
-    cudaMalloc(&d_T, imageBytes);
-    cudaMalloc(&d_F, imageBytes);
-    cudaMalloc(&d_Xi, imageBytes);
-    cudaMalloc(&d_Xj, imageBytes);
     cudaMemcpy(d_T, d_U, imageBytes, cudaMemcpyDeviceToDevice);
     cudaMemset(d_Xi, 0, imageBytes);
     cudaMemset(d_Xj, 0, imageBytes);
@@ -155,8 +161,4 @@ void executeKernel(void *d_in, void *d_out, size_t w, size_t h)
         update_U<<< dimGrid, dimBlock >>>(d_T, d_Xi, d_Xj, d_F, d_U, w, h, tau);
     }
     update_Output<<< dimGrid, dimBlock >>>(pixel, d_U, w, h);
-    cudaFree(d_T);
-    cudaFree(d_F);
-    cudaFree(d_Xi);
-    cudaFree(d_Xj);
 }

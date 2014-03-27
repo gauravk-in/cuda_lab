@@ -19,6 +19,7 @@ protected:
 
 private:
     QGLFunctions gl;
+    void *d_in;
 };
 
 #endif // GLWIDGET_H

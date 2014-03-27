@@ -1,4 +1,5 @@
 #include "camera.h"
+#include "kernel.h"
 #include "glwidget.h"
 
 #include <iostream>
@@ -16,6 +17,7 @@ int main(int argc, char *argv[])
     }
 
     QObject::connect(&camera, SIGNAL(newFrame()), &w, SLOT(updateGL()));
+    allocate_device_memory(camera.width(), camera.height());
 
     camera.start();
     w.show();

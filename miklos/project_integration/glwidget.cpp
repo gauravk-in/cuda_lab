@@ -17,6 +17,7 @@ GlWidget::GlWidget(QWidget *parent)
 
 GlWidget::~GlWidget()
 {
+	cudaFree(d_in);
 }
 
 QSize GlWidget::sizeHint() const
@@ -35,6 +36,9 @@ void GlWidget::initializeGL()
     size_t size = camera.width() * camera.height() * 4 * sizeof(unsigned char);
     gl.glBufferData(GL_PIXEL_UNPACK_BUFFER, size, 0, GL_DYNAMIC_DRAW);
     cudaGraphicsGLRegisterBuffer(&pixelsVBO_CUDA, pixelsVBO, cudaGraphicsMapFlagsWriteDiscard);
+
+    size_t inBytes = camera.width() * camera.height() * sizeof(float);
+    cudaMalloc(&d_in, inBytes);
 }
 
 void GlWidget::paintGL()
@@ -46,8 +50,6 @@ void GlWidget::paintGL()
     cudaGraphicsResourceGetMappedPointer(&d_out, &size,  pixelsVBO_CUDA);
 
     size_t inBytes = camera.width() * camera.height() * sizeof(float);
-    void *d_in;
-    cudaMalloc(&d_in, inBytes);
     {
         QMutexLocker locker(&camera.mutex);
         cudaMemcpy(d_in, camera.data(), inBytes, cudaMemcpyHostToDevice);
@@ -57,8 +59,6 @@ void GlWidget::paintGL()
 
     // Execute kernel
     executeKernel(d_in, d_out, camera.width(), camera.height());
-
-    cudaFree(d_in);
 
     // Unmap buffer object
     cudaGraphicsUnmapResources(1, &pixelsVBO_CUDA, 0);
