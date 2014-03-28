@@ -28,7 +28,35 @@ int MainWindow::init()
     QObject::connect(&camera, SIGNAL(newFrame()), ui->widget, SLOT(updateGL()));
     allocate_device_memory(ui->widget->d_in, camera.width(), camera.height());
 
+    QObject::connect(ui->widget, SIGNAL(fps_updated(float)), this, SLOT(update_fps(float)));
+
     camera.start();
 
     return 0;
 }
+
+void MainWindow::on_spinBox_valueChanged(int arg1)
+{
+    ui->widget->N = arg1;
+}
+
+void MainWindow::on_doubleSpinBox_3_valueChanged(double arg1)
+{
+    ui->widget->lambda = arg1;
+}
+
+void MainWindow::on_doubleSpinBox_4_valueChanged(double arg1)
+{
+    ui->widget->c2 = arg1;
+}
+
+void MainWindow::on_doubleSpinBox_5_valueChanged(double arg1)
+{
+    ui->widget->c1 = arg1;
+}
+
+void MainWindow::update_fps(float fps)
+{
+    ui->plainTextEdit->appendPlainText(QString::number((double)fps));
+}
+

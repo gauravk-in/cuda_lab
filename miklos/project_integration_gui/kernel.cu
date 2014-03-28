@@ -1,5 +1,5 @@
 #include "kernel.h"
-#include "timer.h"
+// #include "timer.h"
 
 #include <algorithm>
 #include <stdio.h>
@@ -133,26 +133,18 @@ void allocate_device_memory(float *d_in, size_t w, size_t h)
 
 }
 
-void executeKernel(float *d_U, void *d_out, size_t w, size_t h)
+void executeKernel(float *d_U, void *d_out, size_t w, size_t h, float lambda, float sigma, float tau, int N, float c1, float c2)
 {
     // float *d_U = reinterpret_cast<float *>(d_in);
     uchar4 *pixel = reinterpret_cast<uchar4 *>(d_out);
 
-    static Timer timer;
-    timer.end();
-    printf("time: %.2fms (%.2f FPS)\n", timer.get() * 1E3F, 1.F / timer.get());
-    timer.start();
+//    static Timer timer;
+//    timer.end();
+//    printf("time: %.2fms (%.2f FPS)\n", timer.get() * 1E3F, 1.F / timer.get());
+//    timer.start();
 
     dim3 dimBlock(32, 16);
     dim3 dimGrid = make_grid(dim3(w, h, 1), dimBlock);
-
-    // set parameters manually here
-    float lambda = 1.0;
-    float sigma = 0.4;
-    float tau = 0.4;
-    int N = 160;
-    float c1 = 1.0;
-    float c2 = 0.00;
 
     size_t imageBytes = w*h*sizeof(float);
     cudaMemcpy(d_T, d_U, imageBytes, cudaMemcpyDeviceToDevice);

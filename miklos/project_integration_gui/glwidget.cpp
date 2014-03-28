@@ -1,6 +1,7 @@
 #include "glwidget.h"
 #include "camera.h"
 #include "kernel.h"
+#include "timer.h"
 
 #include <QGLFunctions>
 #include <iostream>
@@ -14,6 +15,12 @@ static struct cudaGraphicsResource* pixelsVBO_CUDA;
 GlWidget::GlWidget(QWidget *parent)
     : QGLWidget(QGLFormat(), parent), gl(context())
 {
+    lambda = 1.0;
+    sigma = 0.4;
+    tau = 0.4;
+    N = 160;
+    c1 = 1.0;
+    c2 = 0.00;
 }
 
 GlWidget::~GlWidget()
@@ -59,7 +66,7 @@ void GlWidget::paintGL()
     }
 
     // Execute kernel
-    executeKernel(d_in, d_out, camera.width(), camera.height());
+    executeKernel(d_in, d_out, camera.width(), camera.height(), lambda, sigma, tau, N, c1, c2);
 
     // Unmap buffer object
     cudaGraphicsUnmapResources(1, &pixelsVBO_CUDA, 0);
@@ -67,4 +74,9 @@ void GlWidget::paintGL()
     // Render from buffer object
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glDrawPixels(camera.width(), camera.height(), GL_RGBA, GL_UNSIGNED_BYTE, 0);
+    timer.end();
+    fps = 1.F / timer.get();
+    std::cout << "FPS = "<<  fps << std::endl;
+    emit fps_updated(fps);
+    timer.start();
 }
