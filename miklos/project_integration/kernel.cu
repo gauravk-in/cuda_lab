@@ -87,11 +87,13 @@ __global__ void update_Output(uchar4* output, float *U, int w, int h) {
     int y = threadIdx.y + blockDim.y * blockIdx.y;
     size_t i = x + (size_t)w*y;
     size_t idx = x + (size_t) w*(h-1 - y);
-    unsigned char temp_res = roundf((U[i] * 255.f));
-    output[idx].x = temp_res;
-    output[idx].y = temp_res;
-    output[idx].z = temp_res;
-    output[idx].w = 255;
+    unsigned char temp = int(U[i] + 0.5f) * 255;
+    if (x < w && y < h) {
+		output[idx].x = temp;
+		output[idx].y = temp;
+		output[idx].z = temp;
+		output[idx].w = 255;
+    }
 
 }
 
@@ -116,16 +118,16 @@ void allocate_device_memory(size_t w, size_t h)
 	cudaMalloc(&d_Xj, imageBytes);
 
 	// Define texture attributes
-    texRef_Xi.addressMode[0] = cudaAddressModeClamp;             // clamp x to border
-    texRef_Xi.addressMode[1] = cudaAddressModeClamp;            // clamp y to border
+    texRef_Xi.addressMode[0] = cudaAddressModeBorder;             // clamp x to border
+    texRef_Xi.addressMode[1] = cudaAddressModeBorder;            // clamp y to border
     texRef_Xi.filterMode = cudaFilterModeLinear;            // linear interpolation
     texRef_Xi.normalized = false;
     cudaChannelFormatDesc desc_Xi = cudaCreateChannelDesc<float>();
     cudaBindTexture2D(NULL, &texRef_Xi, d_Xi, &desc_Xi, w, h, w*sizeof(d_Xi[0]));
 
 	// Define texture attributes
-    texRef_Xj.addressMode[0] = cudaAddressModeClamp;             // clamp x to border
-    texRef_Xj.addressMode[1] = cudaAddressModeClamp;            // clamp y to border
+    texRef_Xj.addressMode[0] = cudaAddressModeBorder;             // clamp x to border
+    texRef_Xj.addressMode[1] = cudaAddressModeBorder;            // clamp y to border
     texRef_Xj.filterMode = cudaFilterModeLinear;            // linear interpolation
     texRef_Xj.normalized = false;
     cudaChannelFormatDesc desc_Xj = cudaCreateChannelDesc<float>();
