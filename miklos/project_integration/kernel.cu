@@ -107,7 +107,7 @@ inline dim3 make_grid(dim3 whole, dim3 block)
 static float *d_T, *d_F, *d_Xi, *d_Xj;
 
 
-void allocate_device_memory(float *d_in, size_t w, size_t h)
+void allocate_device_memory(size_t w, size_t h)
 {
 	size_t imageBytes = w*h*sizeof(float);
 	cudaMalloc(&d_T, imageBytes);
