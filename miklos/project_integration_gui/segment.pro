@@ -1,7 +1,6 @@
 QT += core gui opengl
-CONFIG += debug
 
-TARGET = hello-opengl
+TARGET = segment
 
 TEMPLATE = app
 
