@@ -57,6 +57,7 @@ void MainWindow::on_doubleSpinBox_5_valueChanged(double arg1)
 
 void MainWindow::update_fps(float fps)
 {
+    ui->plainTextEdit->clear();
     ui->plainTextEdit->appendPlainText(QString::number((double)fps));
 }
 
