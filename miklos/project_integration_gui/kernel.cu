@@ -85,14 +85,15 @@ __global__ void update_Output(uchar4* output, float *U, int w, int h) {
 
     int x = threadIdx.x + blockDim.x * blockIdx.x;
     int y = threadIdx.y + blockDim.y * blockIdx.y;
-    size_t i = x + (size_t)w*y;
-    size_t idx = x + (size_t) w*(h-1 - y);
-    unsigned char temp_res = roundf((U[i] * 255.f));
-    output[idx].x = temp_res;
-    output[idx].y = temp_res;
-    output[idx].z = temp_res;
-    output[idx].w = 255;
-
+    if( x < w && y < h ) {
+        size_t i = x + (size_t)w*y;
+        size_t idx = x + (size_t) w*(h-1 - y);
+        unsigned char temp_res = int(U[i] + 0.5f) * 255;
+        output[idx].x = temp_res;
+        output[idx].y = temp_res;
+        output[idx].z = temp_res;
+        output[idx].w = 255;
+    }
 }
 
 inline int div_ceil(int n, int b) { return (n + b - 1) / b; }
