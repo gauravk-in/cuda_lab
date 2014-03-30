@@ -116,16 +116,16 @@ void allocate_device_memory(float *d_in, size_t w, size_t h)
 	cudaMalloc(&d_Xj, imageBytes);
 
 	// Define texture attributes
-    texRef_Xi.addressMode[0] = cudaAddressModeClamp;             // clamp x to border
-    texRef_Xi.addressMode[1] = cudaAddressModeClamp;            // clamp y to border
+    texRef_Xi.addressMode[0] = cudaAddressModeBorder;             // clamp x to border
+    texRef_Xi.addressMode[1] = cudaAddressModeBorder;            // clamp y to border
     texRef_Xi.filterMode = cudaFilterModeLinear;            // linear interpolation
     texRef_Xi.normalized = false;
     cudaChannelFormatDesc desc_Xi = cudaCreateChannelDesc<float>();
     cudaBindTexture2D(NULL, &texRef_Xi, d_Xi, &desc_Xi, w, h, w*sizeof(d_Xi[0]));
 
 	// Define texture attributes
-    texRef_Xj.addressMode[0] = cudaAddressModeClamp;             // clamp x to border
-    texRef_Xj.addressMode[1] = cudaAddressModeClamp;            // clamp y to border
+    texRef_Xj.addressMode[0] = cudaAddressModeBorder;             // clamp x to border
+    texRef_Xj.addressMode[1] = cudaAddressModeBorder;            // clamp y to border
     texRef_Xj.filterMode = cudaFilterModeLinear;            // linear interpolation
     texRef_Xj.normalized = false;
     cudaChannelFormatDesc desc_Xj = cudaCreateChannelDesc<float>();
