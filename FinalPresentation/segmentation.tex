@@ -266,6 +266,7 @@ What is Interoperability?
 
 \begin{frame}[fragile]
 	\frametitle{How to use OpenGL Interop?}
+	Inside the Display Loop,
 	\begin{itemize}
 		\item Before starting kernel, map pixel buffer to a CUDA pointer.
 		\begin{lstlisting}
@@ -281,14 +282,6 @@ What is Interoperability?
 		\begin{lstlisting}
 		glDrawPixels(w, h, GL_RGBA, GL_UNSIGNED_BYTE, 0);
 		\end{lstlisting}
-	\end{itemize}
-\end{frame}
-
-\begin{frame}
-	\frametitle{Challenges for OpenGL Interop}
-	\begin{itemize}
-		\item Converting float representation of gray scale pixel data in kernel, to unsigned four channel RGBA exected by OpenGL.
-		\item Using OpenGL interop with Qt for making GUI.
 	\end{itemize}
 \end{frame}
 
