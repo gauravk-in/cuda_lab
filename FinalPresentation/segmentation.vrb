@@ -4,6 +4,14 @@
 \begin{lstlisting}
 cudaGraphicsMapResources(1, &pixels_CUDA, 0);
 cudaGraphicsResourceGetMappedPointer(&d_pixels, &size,  pixels_CUDA);
-
+\end{lstlisting}
+\item Pass CUDA pointer as parameter for kernel. The kernel writes to the buffer in \textbf{RGBA8} format.
+\item After kernel execution, unmap pixel buffer.
+\begin{lstlisting}
+cudaGraphicsUnmapResources(1, &pixels_CUDA, 0);
+\end{lstlisting}
+\item Draw buffer
+\begin{lstlisting}
+glDrawPixels(w, h, GL_RGBA, GL_UNSIGNED_BYTE, 0);
 \end{lstlisting}
 \end{itemize}
