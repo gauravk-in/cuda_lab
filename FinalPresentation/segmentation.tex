@@ -122,6 +122,71 @@ Technical University of Munich \\ % Your institution for the title page
 
 \section{Algorithm}
 
+\subsection{Binary Image Segmentation}
+
+\begin{frame}
+  \frametitle{Binary Image Segmentation}
+
+  Energy functional
+  \begin{equation*}
+    E_1(u) := \int_{{\rm I\!R}^N} \left| \nabla u \right|
+    + \lambda \int_{{\rm I\!R}^N} \left| u(x) - f(x) \right| \, dx
+  \end{equation*}
+
+  Functional derivative
+  \begin{equation*}
+    \frac{\delta E_1}{\delta u} = - \, \mathrm{div} \left( {\frac{\nabla u}{| \nabla u |}} \right)
+    + \lambda \frac{u - f}{|u - f|}
+  \end{equation*}
+
+  Gradient descent solver \\~\\
+
+  \begin{thebibliography}{99}
+  \bibitem[Chan, 2005]{} Tony F. Chan, Selim Esedoglu and Mila Nikolova (2005)
+    \newblock Finding the Global Minimum for Binary Image Restoration
+  \end{thebibliography}
+\end{frame}
+
+\begin{frame}
+  \frametitle{Sample Result}
+
+\end{frame}
+
+\subsection{Grayscale Image Segmentation}
+
+\begin{frame}
+  \frametitle{Grayscale Image Segmentation}
+
+  Euler-Lagrange equation
+  \begin{equation*}
+    \mathrm{div} \left( {\frac{\nabla u}{| \nabla u |}} \right)
+    - \lambda \, s(x) - \alpha \, \nu'(u) = 0
+  \end{equation*}
+  where $ s(x) = (c_1 - f(x))^2 - (c_2 - f(x))^2 $, and $ \alpha \, \nu'(u) $ forces $ u $ into $ [0; 1] $.
+  \\~\\
+  Gradient descent solver
+  \\~\\
+  \begin{thebibliography}{99}
+  \bibitem[Chan, 2004]{} Tony F. Chan, Selim Esedoglu and Mila Nikolova (2004)
+    \newblock Algorithms for Finding Global Minimizers of Image Segmentation and Denoising Models
+  \end{thebibliography}
+\end{frame}
+
+\begin{frame}
+  \frametitle{Sample Result}
+
+\end{frame}
+
+\subsection{Primal-Dual Method}
+
+\begin{frame}
+  \frametitle{Primal-Dual Method}
+  \emph{Motivation:} Gradient descent solver has slow convergence.
+  \\~\\
+  Primal variable $ u $
+
+  Dual variable $ \xi $ (roughly similar to $ \mathrm{grad} \, u $):
+\end{frame}
 
 \section{CUDA Implementation}
 
