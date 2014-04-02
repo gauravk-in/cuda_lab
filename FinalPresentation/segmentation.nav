@@ -1,0 +1,30 @@
+\beamer@endinputifotherversion {3.24pt}
+\headcommand {\slideentry {0}{0}{1}{1/1}{}{0}}
+\headcommand {\beamer@framepages {1}{1}}
+\headcommand {\slideentry {0}{0}{2}{2/2}{}{0}}
+\headcommand {\beamer@framepages {2}{2}}
+\headcommand {\sectionentry {1}{Introduction}{3}{Introduction}{0}}
+\headcommand {\beamer@sectionpages {1}{2}}
+\headcommand {\beamer@subsectionpages {1}{2}}
+\headcommand {\slideentry {1}{0}{3}{3/3}{}{0}}
+\headcommand {\beamer@framepages {3}{3}}
+\headcommand {\sectionentry {2}{Algorithm}{4}{Algorithm}{0}}
+\headcommand {\beamer@sectionpages {3}{3}}
+\headcommand {\beamer@subsectionpages {3}{3}}
+\headcommand {\sectionentry {3}{CUDA Implementation}{4}{CUDA Implementation}{0}}
+\headcommand {\beamer@sectionpages {4}{3}}
+\headcommand {\beamer@subsectionpages {4}{3}}
+\headcommand {\sectionentry {4}{Optimizations}{4}{Optimizations}{0}}
+\headcommand {\beamer@sectionpages {4}{3}}
+\headcommand {\beamer@subsectionpages {4}{3}}
+\headcommand {\beamer@subsectionentry {0}{4}{1}{4}{Texture Memory}}\headcommand {\beamer@subsectionpages {4}{3}}
+\headcommand {\beamer@subsectionentry {0}{4}{2}{4}{OpenGL Interoperability}}\headcommand {\beamer@subsectionpages {4}{3}}
+\headcommand {\slideentry {4}{2}{1}{4/4}{OpenGL Interoperability}{0}}
+\headcommand {\beamer@framepages {4}{4}}
+\headcommand {\slideentry {4}{2}{2}{5/5}{OpenGL Interoperability}{0}}
+\headcommand {\beamer@framepages {5}{5}}
+\headcommand {\beamer@partpages {1}{5}}
+\headcommand {\beamer@subsectionpages {4}{5}}
+\headcommand {\beamer@sectionpages {4}{5}}
+\headcommand {\beamer@documentpages {5}}
+\headcommand {\def \inserttotalframenumber {5}}

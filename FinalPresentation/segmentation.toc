@@ -1,0 +1,7 @@
+\beamer@endinputifotherversion {3.24pt}
+\beamer@sectionintoc {1}{Introduction}{3}{0}{1}
+\beamer@sectionintoc {2}{Algorithm}{4}{0}{2}
+\beamer@sectionintoc {3}{CUDA Implementation}{4}{0}{3}
+\beamer@sectionintoc {4}{Optimizations}{4}{0}{4}
+\beamer@subsectionintoc {4}{1}{Texture Memory}{4}{0}{4}
+\beamer@subsectionintoc {4}{2}{OpenGL Interoperability}{4}{0}{4}
