@@ -78,6 +78,7 @@
 
 \usepackage{graphicx} % Allows including images
 \usepackage{booktabs} % Allows the use of \toprule, \midrule and \bottomrule in tables
+\usepackage{listings}
 
 %----------------------------------------------------------------------------------------
 %	TITLE PAGE
@@ -94,6 +95,13 @@ Technical University of Munich \\ % Your institution for the title page
 \date{\today} % Date, can be changed to a custom date
 
 \begin{document}
+ \lstset{language=C++,
+ 	basicstyle=\ttfamily\scriptsize,
+ 	keywordstyle=\color{blue}\ttfamily,
+ 	stringstyle=\color{red}\ttfamily,
+ 	commentstyle=\color{green}\ttfamily,
+ 	breaklines=true
+ }
 
 \begin{frame}
 \titlepage % Print the title page as the first slide
@@ -134,6 +142,46 @@ Technical University of Munich \\ % Your institution for the title page
 
 \subsection{OpenGL Interoperability}
 
+\begin{frame}
+\frametitle{OpenGL Interoperability}
+What is Interoperability?
+\begin{itemize}
+	\item Mapping OpenGL Resources to CUDA, to enable CUDA to read/write
+	\item Can be used to show output from CUDA kernel, straight from GPU saving time and bandwidth
+\end{itemize}
+\end{frame}
+
+%------------------------------------------------
+
+\begin{frame}[fragile]
+	\frametitle{How to use OpenGL Interop?}
+	\begin{itemize}
+		\item Set current threads OpenGL context to use for OpenGL interop with CUDA \textbf{device}.
+		\begin{lstlisting}
+		cudaGLSetGLDevice(device);
+		\end{lstlisting}
+		\item Create OpenGL Pixel Buffer, and register to use as CUDA buffer.
+		\begin{lstlisting}
+		gl.glGenBuffers(1, &pixels);
+		gl.glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pixels);
+		size_t size = w * h * 4 * sizeof(unsigned char);
+		gl.glBufferData(GL_PIXEL_UNPACK_BUFFER, size, 0, GL_DYNAMIC_DRAW);
+		cudaGraphicsGLRegisterBuffer(&pixels_CUDA, pixels, cudaGraphicsMapFlagsWriteDiscard);
+		\end{lstlisting}
+	\end{itemize}
+\end{frame}
+
+\begin{frame}[fragile]
+	\frametitle{How to use OpenGL Interop?}
+	\begin{itemize}
+		\item Before starting kernel, map pixel buffer to a CUDA pointer.
+		\begin{lstlisting}
+		cudaGraphicsMapResources(1, &pixels_CUDA, 0); 
+		cudaGraphicsResourceGetMappedPointer(&d_pixels, &size,  pixels_CUDA);
+		
+		\end{lstlisting}
+	\end{itemize}
+\end{frame}
 
 \begin{frame}
 \frametitle{References}

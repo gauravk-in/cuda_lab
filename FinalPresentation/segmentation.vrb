@@ -1,4 +1,9 @@
-\frametitle{Citation}
-An example of the \verb|\cite| command to cite within the presentation:\\~
+\frametitle{How to use OpenGL Interop?}
+\begin{itemize}
+\item Before starting kernel, map pixel buffer to a CUDA pointer.
+\begin{lstlisting}
+cudaGraphicsMapResources(1, &pixels_CUDA, 0);
+cudaGraphicsResourceGetMappedPointer(&d_pixels, &size,  pixels_CUDA);
 
-This statement requires citation \cite{p1}.
+\end{lstlisting}
+\end{itemize}
