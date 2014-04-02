@@ -190,12 +190,40 @@ Technical University of Munich \\ % Your institution for the title page
 
 \section{CUDA Implementation}
 
+\begin{frame}
+  \frametitle{CUDA Implementation}
+  \begin{itemize}
+  \item Update kernels calls from CPU to have synchrionzation
+
+  \item Update X and update U implemented as two kernels
+
+  \item Image arrays swapped after each iteration
+
+  \item Branching to avoid invalid memory accesses
+  
+  \end{itemize}
+
+\end{frame}
 
 \section{Optimizations}
 
 
 \subsection{Texture Memory}
 
+\begin{frame}
+  \frametitle{CUDA Implementation}
+  \begin{itemize}
+  \item Swapping images after each iteration makes things difficult
+
+  \item Can not be used in gradient calculation, Can be used in divergence calculation
+
+  \item Texture memory used on intermediate results $ X_i $ and $ X_j $
+  
+  \item Improves the fps by 12 \%
+  
+  \end{itemize}
+
+\end{frame}
 
 \subsection{OpenGL Interoperability}
 
