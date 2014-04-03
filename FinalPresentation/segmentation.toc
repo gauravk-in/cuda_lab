@@ -4,7 +4,7 @@
 \beamer@subsectionintoc {2}{1}{Binary Image Segmentation}{4}{0}{2}
 \beamer@subsectionintoc {2}{2}{Grayscale Image Segmentation}{6}{0}{2}
 \beamer@subsectionintoc {2}{3}{Primal-Dual Method}{8}{0}{2}
-\beamer@sectionintoc {3}{CUDA Implementation}{9}{0}{3}
-\beamer@sectionintoc {4}{Optimizations}{10}{0}{4}
-\beamer@subsectionintoc {4}{1}{Texture Memory}{10}{0}{4}
-\beamer@subsectionintoc {4}{2}{OpenGL Interoperability}{11}{0}{4}
+\beamer@sectionintoc {3}{CUDA Implementation}{10}{0}{3}
+\beamer@sectionintoc {4}{Optimizations}{11}{0}{4}
+\beamer@subsectionintoc {4}{1}{Texture Memory}{11}{0}{4}
+\beamer@subsectionintoc {4}{2}{OpenGL Interoperability}{12}{0}{4}

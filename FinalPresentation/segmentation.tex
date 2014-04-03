@@ -277,14 +277,7 @@ Technical University of Munich \\ % Your institution for the title page
 
 \subsection{OpenGL Interoperability}
 
-\begin{frame}
-\frametitle{OpenGL Interoperability}
-What is Interoperability?
-\begin{itemize}
-	\item Mapping OpenGL Resources to CUDA, to enable CUDA to read/write
-	\item Can be used to show output from CUDA kernel, straight from GPU saving time and bandwidth
-\end{itemize}
-\end{frame}
+
 
 %------------------------------------------------
 
@@ -325,6 +318,11 @@ What is Interoperability?
 		glDrawPixels(w, h, GL_RGBA, GL_UNSIGNED_BYTE, 0);
 		\end{lstlisting}
 	\end{itemize}
+\end{frame}
+
+\begin{frame}
+	\frametitle{Performace Improvement from Optimizations}
+	After Texture Memory Optimization and OpenGL Interop, FPS increases by 33 \% from 6.66 to 8.80 FPS.
 \end{frame}
 
 \begin{frame}

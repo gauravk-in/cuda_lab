@@ -24,30 +24,30 @@
 \headcommand {\beamer@subsectionentry {0}{2}{3}{8}{Primal-Dual Method}}\headcommand {\beamer@subsectionpages {6}{7}}
 \headcommand {\slideentry {2}{3}{1}{8/8}{Primal-Dual Method}{0}}
 \headcommand {\beamer@framepages {8}{8}}
-\headcommand {\sectionentry {3}{CUDA Implementation}{9}{CUDA Implementation}{0}}
-\headcommand {\beamer@sectionpages {4}{8}}
-\headcommand {\beamer@subsectionpages {8}{8}}
-\headcommand {\slideentry {3}{0}{2}{9/9}{}{0}}
+\headcommand {\slideentry {2}{3}{2}{9/9}{Primal-Dual Method}{0}}
 \headcommand {\beamer@framepages {9}{9}}
-\headcommand {\sectionentry {4}{Optimizations}{10}{Optimizations}{0}}
-\headcommand {\beamer@sectionpages {9}{9}}
-\headcommand {\beamer@subsectionpages {9}{9}}
-\headcommand {\beamer@subsectionentry {0}{4}{1}{10}{Texture Memory}}\headcommand {\beamer@subsectionpages {10}{9}}
-\headcommand {\slideentry {4}{1}{1}{10/10}{Texture Memory}{0}}
+\headcommand {\sectionentry {3}{CUDA Implementation}{10}{CUDA Implementation}{0}}
+\headcommand {\beamer@sectionpages {4}{9}}
+\headcommand {\beamer@subsectionpages {8}{9}}
+\headcommand {\slideentry {3}{0}{3}{10/10}{}{0}}
 \headcommand {\beamer@framepages {10}{10}}
-\headcommand {\beamer@subsectionentry {0}{4}{2}{11}{OpenGL Interoperability}}\headcommand {\beamer@subsectionpages {10}{10}}
-\headcommand {\slideentry {4}{2}{1}{11/11}{OpenGL Interoperability}{0}}
+\headcommand {\sectionentry {4}{Optimizations}{11}{Optimizations}{0}}
+\headcommand {\beamer@sectionpages {10}{10}}
+\headcommand {\beamer@subsectionpages {10}{10}}
+\headcommand {\beamer@subsectionentry {0}{4}{1}{11}{Texture Memory}}\headcommand {\beamer@subsectionpages {11}{10}}
+\headcommand {\slideentry {4}{1}{1}{11/11}{Texture Memory}{0}}
 \headcommand {\beamer@framepages {11}{11}}
-\headcommand {\slideentry {4}{2}{2}{12/12}{OpenGL Interoperability}{0}}
+\headcommand {\beamer@subsectionentry {0}{4}{2}{12}{OpenGL Interoperability}}\headcommand {\beamer@subsectionpages {11}{11}}
+\headcommand {\slideentry {4}{2}{1}{12/12}{OpenGL Interoperability}{0}}
 \headcommand {\beamer@framepages {12}{12}}
-\headcommand {\slideentry {4}{2}{3}{13/13}{OpenGL Interoperability}{0}}
+\headcommand {\slideentry {4}{2}{2}{13/13}{OpenGL Interoperability}{0}}
 \headcommand {\beamer@framepages {13}{13}}
-\headcommand {\slideentry {4}{2}{4}{14/14}{OpenGL Interoperability}{0}}
+\headcommand {\slideentry {4}{2}{3}{14/14}{OpenGL Interoperability}{0}}
 \headcommand {\beamer@framepages {14}{14}}
-\headcommand {\slideentry {4}{2}{5}{15/15}{OpenGL Interoperability}{0}}
+\headcommand {\slideentry {4}{2}{4}{15/15}{OpenGL Interoperability}{0}}
 \headcommand {\beamer@framepages {15}{15}}
 \headcommand {\beamer@partpages {1}{15}}
-\headcommand {\beamer@subsectionpages {11}{15}}
-\headcommand {\beamer@sectionpages {10}{15}}
+\headcommand {\beamer@subsectionpages {12}{15}}
+\headcommand {\beamer@sectionpages {11}{15}}
 \headcommand {\beamer@documentpages {15}}
 \headcommand {\def \inserttotalframenumber {15}}
