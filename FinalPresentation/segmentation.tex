@@ -79,12 +79,13 @@
 \usepackage{graphicx} % Allows including images
 \usepackage{booktabs} % Allows the use of \toprule, \midrule and \bottomrule in tables
 \usepackage{listings}
+\usepackage{adjustbox}
 
 %----------------------------------------------------------------------------------------
 %	TITLE PAGE
 %----------------------------------------------------------------------------------------
 
-\title[Short title]{Real Time Image Segmentation} % The short title appears at the bottom of every slide, the full title is only on the title page
+\title{Real-time Image Segmentation} % The short title appears at the bottom of every slide, the full title is only on the title page
 
 \author{Miklos Homolya, Ravikishore Kommajosyula, Gaurav Kukreja} % Your name
 \institute[TUM] % Your institution as it will appear on the bottom of every slide, may be shorthand to save space
@@ -157,7 +158,16 @@ Technical University of Munich \\ % Your institution for the title page
 
 \begin{frame}
   \frametitle{Sample Result}
-
+  \begin{columns}[t]
+    \begin{column}{.4\textwidth}
+      \adjincludegraphics[width=\linewidth]{binary_in}
+      Noisy binary image.
+    \end{column}
+    \begin{column}{.4\textwidth}
+      \adjincludegraphics[width=\linewidth]{binary_out}
+      Restored binary image.
+    \end{column}
+  \end{columns}
 \end{frame}
 
 \subsection{Grayscale Image Segmentation}
@@ -182,7 +192,16 @@ Technical University of Munich \\ % Your institution for the title page
 
 \begin{frame}
   \frametitle{Sample Result}
-
+  \begin{columns}[t]
+    \begin{column}{.4\textwidth}
+      \adjincludegraphics[width=\linewidth]{camera_in}
+      Grayscale input image.
+    \end{column}
+    \begin{column}{.4\textwidth}
+      \adjincludegraphics[width=\linewidth]{camera_out}
+      Segmentation (without thresholding).
+    \end{column}
+  \end{columns}
 \end{frame}
 
 \subsection{Primal-Dual Method}
@@ -200,14 +219,23 @@ Technical University of Munich \\ % Your institution for the title page
     \xi : \Omega \to \left\{ (x, y) : x^2 + y^2 \le 1 \right\}
   \end{equation*}
 
-  Algorithm
+  Algorithm:
   \begin{align*}
     \xi^{n+1} &= \Pi_{\mathcal{K}}(\xi^n - \sigma \nabla \bar{u}^n)
     \\
-    u^{n+1} &= \Pi_{\mathcal{C}}(u^n - \tau (\mathrm{div} \xi^{n+1} + f))
+    u^{n+1} &= \Pi_{\mathcal{C}}(u^n - \tau (\mathrm{div} \xi^{n+1} + s))
     \\
     \bar{u}^{n+1} &= u^{n+1} + (u^{n+1} - u^n) = 2 u^{n+1} - u^n
   \end{align*}
+  $ \Pi_{\mathcal{C}} $ and $ \Pi_{\mathcal{K}} $ clamp the range to fit $ \mathcal{C} $ and $ \mathcal{K} $ respectively.
+\end{frame}
+
+\begin{frame}
+  \frametitle{Result}
+  \begin{itemize}
+  \item A single iteration is costlier than for the gradient descent solver, but we could reduce iteration count from 2000 to 160.
+  \item Huge impact on performance.
+  \end{itemize}
 \end{frame}
 
 \section{CUDA Implementation}
@@ -215,11 +243,11 @@ Technical University of Munich \\ % Your institution for the title page
 \begin{frame}
   \frametitle{CUDA Implementation}
   \begin{itemize}
-  \item Update kernels calls from CPU to have synchrionzation
+  \item Update kernels calls from CPU to have synchronization
 
-  \item Update X and update U implemented as two kernels
+  \item Update $ \xi $ and update $ u $ implemented as two kernels
 
-  \item Image arrays swapped after each iteration
+  \item Image arrays for $ u^{n-1} $ and $ u^n $ swapped after each iteration
 
   \item Branching to avoid invalid memory accesses
   
@@ -237,11 +265,11 @@ Technical University of Munich \\ % Your institution for the title page
   \begin{itemize}
   \item Swapping images after each iteration makes things difficult
 
-  \item Can not be used in gradient calculation, Can be used in divergence calculation
+  \item Cannot be used in gradient calculation. Can be used in divergence calculation
 
-  \item Texture memory used on intermediate results $ X_i $ and $ X_j $
+  \item Texture memory used on intermediate results $ \xi_x $ and $ \xi_y $
   
-  \item Improves the fps by 12 \%
+  \item Improves the FPS by 12\%
   
   \end{itemize}
 
@@ -300,22 +328,8 @@ What is Interoperability?
 \end{frame}
 
 \begin{frame}
-\frametitle{References}
-\footnotesize{
-\begin{thebibliography}{99} % Beamer does not support BibTeX so references must be inserted manually as below
-\bibitem[Smith, 2012]{p1} John Smith (2012)
-\newblock Title of the publication
-\newblock \emph{Journal Name} 12(3), 45 -- 678.
-\end{thebibliography}
-}
+  \frametitle{Demo}
+  \huge{\centerline{Thank you for your attention.}}
 \end{frame}
-
-%------------------------------------------------
-
-\begin{frame}
-\Huge{\centerline{The End}}
-\end{frame}
-
-%----------------------------------------------------------------------------------------
 
 \end{document} 
