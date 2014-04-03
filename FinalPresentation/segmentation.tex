@@ -191,9 +191,23 @@ Technical University of Munich \\ % Your institution for the title page
   \frametitle{Primal-Dual Method}
   \emph{Motivation:} Gradient descent solver has slow convergence.
   \\~\\
-  Primal variable $ u $
+  Primal variable $ u \in \mathcal{C} $
+  \begin{equation*}
+    u : \Omega \to [0; 1]
+  \end{equation*}
+  Dual variable $ \xi \in \mathcal{K} $ \quad ($ \xi \sim \mathrm{grad} \, u $)
+  \begin{equation*}
+    \xi : \Omega \to \left\{ (x, y) : x^2 + y^2 \le 1 \right\}
+  \end{equation*}
 
-  Dual variable $ \xi $ (roughly similar to $ \mathrm{grad} \, u $):
+  Algorithm
+  \begin{align*}
+    \xi^{n+1} &= \Pi_{\mathcal{K}}(\xi^n - \sigma \nabla \bar{u}^n)
+    \\
+    u^{n+1} &= \Pi_{\mathcal{C}}(u^n - \tau (\mathrm{div} \xi^{n+1} + f))
+    \\
+    \bar{u}^{n+1} &= u^{n+1} + (u^{n+1} - u^n) = 2 u^{n+1} - u^n
+  \end{align*}
 \end{frame}
 
 \section{CUDA Implementation}
